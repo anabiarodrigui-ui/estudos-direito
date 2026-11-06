@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Estudos de Direito</title>
+  <meta name="description" content="Organizador de estudos para as provas finais de Direito: matérias, calendário, resumos, flashcards e pomodoro.">
+  <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#16181c" media="(prefers-color-scheme: dark)">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-512-maskable.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Estudos">
+  <script>
+    // Aplica o tema salvo antes de desenhar a página (evita "piscar" claro/escuro).
+    try {
+      var s = JSON.parse(localStorage.getItem('ed:settings') || '{}');
+      if (s.theme === 'light' || s.theme === 'dark') document.documentElement.dataset.theme = s.theme;
+    } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+    <nav class="nav" id="nav" aria-label="Navegação principal"></nav>
+    <main class="main" id="view" tabindex="-1"></main>
+  </div>
+  <div id="timer-pill" class="timer-pill" hidden></div>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <noscript>Este aplicativo precisa de JavaScript ativado.</noscript>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
