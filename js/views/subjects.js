@@ -2,8 +2,11 @@
 import * as db from '../core/db.js';
 import { esc, openModal, formData, confirmDialog, toast } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { COLORS, subjects } from '../ui/common.js';
+import { COLORS, COLOR_FAMILIES, subjects } from '../ui/common.js';
 import { fmtBR, todayISO, diffDays, countdownText } from '../core/dates.js';
+
+// sugestão automática para matérias novas: alterna rosa, azul e roxo
+const SUGGESTED = [3, 8, 13, 1, 6, 11, 4, 9, 14, 0, 5, 10, 2, 7, 12].map((i) => COLORS[i]);
 
 export function render(root) {
   const list = subjects();
@@ -29,12 +32,14 @@ export function render(root) {
 
 /** Formulário de matéria (novo ou edição). */
 export function openSubjectForm(subject = null) {
-  const s = subject || { name: '', color: COLORS[db.all('subjects').length % COLORS.length], teacher: '', examDate: '', examTime: '' };
+  const s = subject || { name: '', color: SUGGESTED[db.all('subjects').length % SUGGESTED.length], teacher: '', examDate: '', examTime: '' };
   openModal({
     title: subject ? 'Editar matéria' : 'Nova matéria',
     body: `<form id="sf">
       <label class="field"><span>Nome da matéria</span><input class="input" name="name" required value="${esc(s.name)}" placeholder="Ex.: Direito Civil III"></label>
-      <div class="field"><span>Cor</span><div class="swatches">${COLORS.map((c) => `<label><input type="radio" name="color" value="${c}" ${c === s.color ? 'checked' : ''}><span style="background:${c}"></span></label>`).join('')}</div></div>
+      <div class="field"><span>Cor</span>
+        ${COLOR_FAMILIES.map((f) => `<div class="swatch-group"><span class="small muted">${f.name}</span><div class="swatches">${f.colors.map(([c, n]) => `<label title="${n}"><input type="radio" name="color" value="${c}" aria-label="${n}" ${c === s.color ? 'checked' : ''}><span style="background:${c}"></span></label>`).join('')}</div></div>`).join('')}
+      </div>
       <label class="field"><span>Professor(a) <span class="muted">(opcional)</span></span><input class="input" name="teacher" value="${esc(s.teacher || '')}"></label>
       <div class="field-row">
         <label class="field"><span>Data da prova</span><input class="input" type="date" name="examDate" value="${s.examDate || ''}"></label>

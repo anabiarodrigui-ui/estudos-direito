@@ -2,8 +2,17 @@
 import * as db from '../core/db.js';
 import { esc } from './dom.js';
 
-/** Paleta sóbria para as matérias (funciona no claro e no escuro). */
-export const COLORS = ['#b83a6e', '#2f4f86', '#8a2d3b', '#2e7d4f', '#9a6400', '#6b3fa0', '#0f7b8a', '#b5523b', '#5b6b2f', '#4a5568'];
+/**
+ * Cores das matérias: 5 tons bem diferentes de rosa, de azul e de roxo
+ * (do mais claro ao mais escuro). Diferença mínima entre tons da mesma família
+ * medida em OKLab (ΔE ≥ 10) para que dê para distinguir as matérias.
+ */
+export const COLOR_FAMILIES = [
+  { name: 'Rosas', colors: [['#f5b3cc', 'Rosa bebê'], ['#ee7aa6', 'Rosa chiclete'], ['#ff2e93', 'Pink choque'], ['#b83a6e', 'Amaranth'], ['#7f1f4a', 'Rosa vinho']] },
+  { name: 'Azuis', colors: [['#9fd6f5', 'Azul bebê'], ['#4a90e2', 'Azul céu'], ['#2bb3c0', 'Azul turquesa'], ['#2f4fc0', 'Azul royal'], ['#1f3a6b', 'Azul marinho']] },
+  { name: 'Roxos', colors: [['#cfb0f2', 'Lilás'], ['#a37ad6', 'Lavanda'], ['#9b4f96', 'Orquídea'], ['#7e3fbf', 'Violeta'], ['#4b2378', 'Roxo uva']] },
+];
+export const COLORS = COLOR_FAMILIES.flatMap((f) => f.colors.map(([c]) => c));
 
 export const subjects = () => db.all('subjects').sort((a, b) => (a.examDate || '9999') < (b.examDate || '9999') ? -1 : (a.examDate || '9999') > (b.examDate || '9999') ? 1 : a.name.localeCompare(b.name));
 export const subjectById = (id) => db.get('subjects', id);
