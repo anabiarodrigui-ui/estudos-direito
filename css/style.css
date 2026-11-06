@@ -100,7 +100,7 @@ svg.i { width: 22px; height: 22px; flex: none; stroke: currentColor; fill: none;
 
 /* Telas largas (tablet em paisagem): navegação lateral */
 @media (min-width: 900px) {
-  .app { display: grid; grid-template-columns: 220px 1fr; }
+  .app { display: grid; grid-template-columns: 220px minmax(0, 1fr); }
   .nav {
     position: sticky; top: 0; height: 100dvh; flex-direction: column; justify-content: flex-start;
     border-top: 0; border-right: 1px solid var(--border); padding: 12px 10px; gap: 4px;
@@ -215,7 +215,7 @@ svg.i { width: 22px; height: 22px; flex: none; stroke: currentColor; fill: none;
   display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 4px;
   width: 100%; background: none; border: 0; text-align: left; cursor: pointer;
 }
-.row .grow { flex: 1; min-width: 0; }
+.row .grow { flex: 1; min-width: 0; overflow: hidden; }
 .row .title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------- formulários ---------- */

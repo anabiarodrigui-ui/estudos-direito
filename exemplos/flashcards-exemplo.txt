@@ -1,0 +1,23 @@
+# Matéria: Direito Civil III — Contratos
+# Tópico: Princípios contratuais
+
+P: Qual artigo do Código Civil trata da função social do contrato?
+R: Art. 421 — a liberdade contratual é exercida nos limites da função social do contrato.
+Tags: princípios, art. 421
+
+P: O que é a boa-fé objetiva?
+R: Regra de conduta que impõe aos contratantes deveres de lealdade,
+cooperação, informação e proteção (art. 422 do CC).
+Tags: boa-fé
+
+# Tópico: Extinção do contrato
+
+P: Diferencie distrato de denúncia.
+R: Distrato é a resilição bilateral (acordo das partes, art. 472);
+denúncia é a resilição unilateral, quando a lei permite (art. 473).
+
+# Matéria: Direito Penal I
+# Tópico: Teoria do crime
+
+P: Quais são os elementos da culpabilidade pela teoria normativa pura?
+R: Imputabilidade, potencial consciência da ilicitude e exigibilidade de conduta diversa.

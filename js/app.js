@@ -73,31 +73,36 @@ function freshRoot() {
 }
 let renderToken = 0;
 
-async function route() {
+/**
+ * Monta a tela da rota r. Navegação e redesenhos passam todos por aqui, em ordem:
+ * um pedido mais novo cancela um anterior que ainda esteja carregando.
+ */
+async function mount(r, { keepScroll = false } = {}) {
   const token = ++renderToken;
-  const r = currentRoute();
-  const loader = ROUTES[r.path] || ROUTES[''];
-  renderNav();
-  try { current?.handle?.destroy?.(); } catch (e) { console.error(e); }
-  const mod = await loader();
+  const mod = await (ROUTES[r.path] || ROUTES[''])();
   if (token !== renderToken) return;
+  try { current?.handle?.destroy?.(); } catch (e) { console.error(e); }
+  const y = window.scrollY;
   const root = freshRoot();
-  const handle = await mod.render(root, r) || {};
-  current = { mod, handle, route: r };
-  window.scrollTo(0, 0);
+  current = { mod, handle: {}, route: r };
+  current.handle = mod.render(root, r) || {};
+  window.scrollTo(0, keepScroll ? y : 0);
+}
+
+function route() {
+  clearTimeout(refreshTimer);
+  renderNav();
+  return mount(currentRoute());
 }
 
 /** Redesenha a tela atual (após alterações nos dados), preservando a rolagem. */
 let refreshTimer = null;
 export function refresh() {
   clearTimeout(refreshTimer);
-  refreshTimer = setTimeout(async () => {
-    if (!current || current.handle.keep) { current?.handle.onData?.(); return; }
-    const y = window.scrollY;
-    try { current.handle.destroy?.(); } catch {}
-    const root = freshRoot();
-    current.handle = await current.mod.render(root, currentRoute()) || {};
-    window.scrollTo(0, y);
+  refreshTimer = setTimeout(() => {
+    if (!current) return;
+    if (current.handle.keep) { current.handle.onData?.(); return; }
+    mount(currentRoute(), { keepScroll: true });
   }, 30);
 }
 
