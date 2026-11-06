@@ -267,9 +267,8 @@ textarea.input.code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas
 @keyframes fade { from { opacity: 0; } }
 @keyframes up { from { transform: translateY(40px); opacity: .5; } }
 
-.toasts { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%); bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; width: max-content; max-width: calc(100% - 32px); }
-.toast { background: var(--text); color: var(--bg); padding: 12px 18px; border-radius: 12px; box-shadow: var(--shadow); font-weight: 600; animation: up .2s ease-out; }
-@media (min-width: 900px) { .toasts { bottom: 24px; } }
+.toasts { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%); top: calc(12px + env(safe-area-inset-top)); display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; width: max-content; max-width: calc(100% - 32px); }
+.toast { background: var(--text); color: var(--bg); padding: 12px 18px; border-radius: 12px; box-shadow: var(--shadow); font-weight: 600; animation: fade .2s ease-out; }
 
 /* ---------- calendário ---------- */
 .cal-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
