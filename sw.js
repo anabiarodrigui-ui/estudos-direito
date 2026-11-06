@@ -3,7 +3,7 @@
  * Estratégia: "cache primeiro" para os arquivos do app, atualizando em segundo plano.
  * Ao publicar uma nova versão, aumente CACHE_VERSION.
  */
-const CACHE_VERSION = 'estudos-v1';
+const CACHE_VERSION = 'estudos-v2';
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-512-maskable.png',

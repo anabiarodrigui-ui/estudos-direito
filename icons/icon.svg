@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#2f4f86"/>
-  <g fill="none" stroke="#f7f6f3" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+  <rect width="512" height="512" rx="112" fill="#b83a6e"/>
+  <g fill="none" stroke="#fbf7f8" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
     <!-- balança da justiça estilizada -->
     <path d="M256 120v272"/>
     <path d="M176 392h160"/>
     <path d="M140 170h232"/>
     <path d="M140 170l-52 112h104z"/>
     <path d="M372 170l-52 112h104z"/>
-    <circle cx="256" cy="120" r="14" fill="#f7f6f3"/>
+    <circle cx="256" cy="120" r="14" fill="#fbf7f8"/>
   </g>
 </svg>

@@ -137,8 +137,8 @@ const SAMPLE_CARDS = {
 
 export async function loadSample() {
   const t = todayISO();
-  const civil = await db.put('subjects', { name: 'Direito Civil III — Contratos', color: '#2f4f86', teacher: 'Prof.ª Helena Duarte', examDate: addDays(t, 12), examTime: '19:00', sample: true });
-  const penal = await db.put('subjects', { name: 'Direito Penal I', color: '#8a2d3b', teacher: 'Prof. Ricardo Nunes', examDate: addDays(t, 19), examTime: '08:30', sample: true });
+  const civil = await db.put('subjects', { name: 'Direito Civil III — Contratos', color: '#b83a6e', teacher: 'Prof.ª Helena Duarte', examDate: addDays(t, 12), examTime: '19:00', sample: true });
+  const penal = await db.put('subjects', { name: 'Direito Penal I', color: '#2f4f86', teacher: 'Prof. Ricardo Nunes', examDate: addDays(t, 19), examTime: '08:30', sample: true });
 
   const g1 = await db.put('guides', { subjectId: civil.id, title: 'Teoria Geral dos Contratos', content: SAMPLE_GUIDE_CIVIL, status: 'novo', order: 0, sample: true });
   const g2 = await db.put('guides', { subjectId: penal.id, title: 'Teoria do Crime — Conceito Analítico', content: SAMPLE_GUIDE_PENAL, status: 'lido', order: 0, sample: true });
