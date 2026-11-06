@@ -1,5 +1,6 @@
 /** Configurações: tema, backup, flashcards, chave da API, dados de exemplo e apagar tudo. */
 import * as db from '../core/db.js';
+import { ls } from '../core/db.js';
 import { esc, toast, confirmDialog, downloadFile, pickFiles, openModal } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { todayISO, fmtBR } from '../core/dates.js';
@@ -8,8 +9,8 @@ import { refresh } from '../app.js';
 
 export function render(root) {
   const s = db.getSettings();
-  const hasKey = !!localStorage.getItem('ed:apiKey');
-  const lastBackup = localStorage.getItem('ed:lastBackup');
+  const hasKey = !!ls.get('ed:apiKey');
+  const lastBackup = ls.get('ed:lastBackup');
   const counts = db.COLLECTIONS.map((c) => [c, db.all(c).length]);
   const sampleCount = db.COLLECTIONS.reduce((a, c) => a + db.where(c, (x) => x.sample).length, 0);
 
@@ -80,18 +81,18 @@ export function render(root) {
     if (t.closest('[data-export]')) {
       const data = db.exportData();
       downloadFile(`estudos-direito-backup-${todayISO()}.json`, JSON.stringify(data, null, 1));
-      localStorage.setItem('ed:lastBackup', todayISO());
+      ls.set('ed:lastBackup', todayISO());
       toast('Backup exportado');
       return refresh();
     }
     if (t.closest('[data-import]')) return importBackup();
     if (t.closest('[data-savekey]')) {
       const k = root.querySelector('[name=apiKey]').value.trim();
-      if (k) localStorage.setItem('ed:apiKey', k);
+      if (k) ls.set('ed:apiKey', k);
       db.setSettings({ apiModel: root.querySelector('[name=apiModel]').value });
       return toast(k ? 'Chave salva neste dispositivo' : 'Modelo salvo');
     }
-    if (t.closest('[data-delkey]')) { localStorage.removeItem('ed:apiKey'); db.setSettings({}); return toast('Chave removida'); }
+    if (t.closest('[data-delkey]')) { ls.remove('ed:apiKey'); db.setSettings({}); return toast('Chave removida'); }
     if (t.closest('[data-sample]')) { const m = await import('../sample.js'); return m.loadSample(); }
     if (t.closest('[data-unsample]')) {
       if (!(await confirmDialog('Remover todos os itens de exemplo? Seus próprios dados não serão afetados.', { ok: 'Remover', danger: true }))) return;

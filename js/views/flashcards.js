@@ -3,6 +3,7 @@
  * e geração a partir dos guias (local ou com IA), sempre com revisão antes de salvar.
  */
 import * as db from '../core/db.js';
+import { ls } from '../core/db.js';
 import { esc, openModal, formData, toast, confirmDialog, pickFiles } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { subjects, subjectChips, subjectOptions, subjectName, subjectColor, activeDates } from '../ui/common.js';
@@ -241,7 +242,7 @@ function pickGuideToGenerate(subjectId) {
 export function openGenerateDialog(guides) {
   guides = guides.filter(Boolean);
   if (!guides.length) return;
-  const hasKey = !!localStorage.getItem('ed:apiKey');
+  const hasKey = !!ls.get('ed:apiKey');
   const existing = new Set(db.all('cards').map((c) => norm(c.front)));
   let cands = [];
   let aborter = null;

@@ -6,6 +6,7 @@
  * continua certo mesmo trocando de tela, bloqueando o tablet ou fechando o app.
  */
 import * as db from '../core/db.js';
+import { ls } from '../core/db.js';
 import { esc, toast, openModal, formData, confirmDialog } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { subjectOptions, subjectName, subjectColor } from '../ui/common.js';
@@ -19,10 +20,10 @@ function durations() {
   return { focus: s.pomoFocus, short: s.pomoShort, long: s.pomoLong, cycles: s.pomoCycles };
 }
 function load() {
-  try { const st = JSON.parse(localStorage.getItem(KEY)); if (st && st.phase) return st; } catch {}
+  try { const st = JSON.parse(ls.get(KEY)); if (st && st.phase) return st; } catch {}
   return { phase: 'focus', running: false, remaining: durations().focus * 60000, endsAt: 0, subjectId: '', cycle: 0, focusStart: 0 };
 }
-function save(st) { localStorage.setItem(KEY, JSON.stringify(st)); }
+function save(st) { ls.set(KEY, JSON.stringify(st)); }
 export const remainingMs = (st) => (st.running ? Math.max(0, st.endsAt - Date.now()) : st.remaining);
 const fmt = (ms) => { const t = Math.ceil(ms / 1000); return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; };
 

@@ -8,6 +8,8 @@
  * aceitar chamadas vindas de um navegador.
  */
 
+import { ls } from './db.js';
+
 export const API_MODELS = [
   { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 — melhor qualidade (padrão)', fallbacks: true },
   { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 — mais rápido e barato', fallbacks: true },
@@ -66,7 +68,7 @@ export function buildRequest({ model, guideTitle, markdown, subjectName, maxCard
  * Lança Error com mensagem em português em caso de falha.
  */
 export async function generateCardsWithAI({ guideTitle, markdown, subjectName, maxCards = 40, model, apiKey, signal }) {
-  apiKey ||= localStorage.getItem('ed:apiKey');
+  apiKey ||= ls.get('ed:apiKey');
   if (!apiKey) throw new Error('Cadastre sua chave da API em Configurações.');
   const meta = API_MODELS.find((m) => m.id === model) || API_MODELS[0];
 

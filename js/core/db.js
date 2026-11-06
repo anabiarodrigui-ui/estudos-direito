@@ -12,6 +12,18 @@ export const DB_VERSION = 1;
 export const COLLECTIONS = ['subjects', 'events', 'guides', 'highlights', 'cards', 'reviews', 'sessions'];
 export const BACKUP_FORMAT = 'estudos-direito-backup';
 
+
+/**
+ * Acesso seguro ao localStorage: se o navegador bloquear o armazenamento
+ * (aba anônima, prévia, dados bloqueados), usa a memória e o app continua funcionando.
+ */
+const memStore = new Map();
+export const ls = {
+  get(k) { try { return localStorage.getItem(k); } catch { return memStore.has(k) ? memStore.get(k) : null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { memStore.set(k, String(v)); } },
+  remove(k) { try { localStorage.removeItem(k); } catch { memStore.delete(k); } },
+};
+
 const cache = Object.fromEntries(COLLECTIONS.map((c) => [c, new Map()]));
 const listeners = new Set();
 let idb = null;          // conexão IndexedDB (ou null se indisponível)
@@ -47,7 +59,7 @@ function tx(col, mode, fn) {
 }
 
 function saveLocal(col) {
-  localStorage.setItem('ed:data:' + col, JSON.stringify([...cache[col].values()]));
+  ls.set('ed:data:' + col, JSON.stringify([...cache[col].values()]));
 }
 
 /** Abre o banco e carrega tudo para a memória. */
@@ -63,7 +75,7 @@ export async function initDB() {
     useLocal = true;
     for (const c of COLLECTIONS) {
       try {
-        const rows = JSON.parse(localStorage.getItem('ed:data:' + c) || '[]');
+        const rows = JSON.parse(ls.get('ed:data:' + c) || '[]');
         cache[c] = new Map(rows.map((r) => [r.id, r]));
       } catch { cache[c] = new Map(); }
     }
@@ -144,12 +156,12 @@ export const DEFAULT_SETTINGS = {
 };
 
 export function getSettings() {
-  try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('ed:settings') || '{}') }; }
+  try { return { ...DEFAULT_SETTINGS, ...JSON.parse(ls.get('ed:settings') || '{}') }; }
   catch { return { ...DEFAULT_SETTINGS }; }
 }
 export function setSettings(patch) {
   const s = { ...getSettings(), ...patch };
-  localStorage.setItem('ed:settings', JSON.stringify(s));
+  ls.set('ed:settings', JSON.stringify(s));
   emit('settings');
   return s;
 }
@@ -184,7 +196,7 @@ export async function importData(json, mode = 'replace') {
   }
   if (json.settings && typeof json.settings === 'object') {
     const { apiKey, ...rest } = json.settings; // nunca importar chave por engano
-    localStorage.setItem('ed:settings', JSON.stringify({ ...getSettings(), ...rest }));
+    ls.set('ed:settings', JSON.stringify({ ...getSettings(), ...rest }));
   }
   emit('*');
 }

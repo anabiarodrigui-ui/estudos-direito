@@ -6,6 +6,7 @@
  * ajuste as alças da seleção e toque numa cor na barra que aparece embaixo.
  */
 import * as db from '../core/db.js';
+import { ls } from '../core/db.js';
 import { esc, openModal, toast, confirmDialog, formData } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { subjectName, subjectOptions } from '../ui/common.js';
@@ -71,7 +72,7 @@ export function render(root, { id, params }) {
     const first = markFind(article, params.q);
     if (first) setTimeout(() => first.scrollIntoView({ block: 'center' }), 50);
   } else {
-    const y = +localStorage.getItem('ed:pos:' + id) || 0;
+    const y = +ls.get('ed:pos:' + id) || 0;
     if (y) setTimeout(() => window.scrollTo(0, y), 30);
   }
 
@@ -96,7 +97,7 @@ export function render(root, { id, params }) {
 
   // posição de leitura
   let st;
-  const onScroll = () => { clearTimeout(st); st = setTimeout(() => localStorage.setItem('ed:pos:' + id, String(Math.round(scrollY))), 300); };
+  const onScroll = () => { clearTimeout(st); st = setTimeout(() => ls.set('ed:pos:' + id, String(Math.round(scrollY))), 300); };
   addEventListener('scroll', onScroll, { passive: true });
 
   root.addEventListener('click', async (e) => {
@@ -132,7 +133,7 @@ export function render(root, { id, params }) {
     destroy() {
       document.removeEventListener('selectionchange', onSel);
       removeEventListener('scroll', onScroll);
-      localStorage.setItem('ed:pos:' + id, String(Math.round(scrollY)));
+      ls.set('ed:pos:' + id, String(Math.round(scrollY)));
     },
   };
 }
