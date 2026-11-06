@@ -135,6 +135,10 @@ try {
     });
   }
 
+  if (!run(1)) { // rodando uma etapa isolada: carrega os dados de exemplo primeiro
+    await page.getByText('Carregar dados de exemplo').click();
+    await page.waitForSelector('.subject-card');
+  }
   if (run(2)) await (await import('./stage2.mjs')).default({ page, step, expect, shot, clickText, BASE });
   if (run(3)) await (await import('./stage3.mjs')).default({ page, step, expect, shot, clickText, BASE });
   if (run(4)) await (await import('./stage4.mjs')).default({ page, step, expect, shot, clickText, BASE, ctx });
