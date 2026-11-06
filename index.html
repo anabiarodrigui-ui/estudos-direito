@@ -17,8 +17,8 @@
   <script>
     // Aplica o tema salvo antes de desenhar a página (evita "piscar" claro/escuro).
     try {
-      var s = JSON.parse(localStorage.getItem('ed:settings') || '{}');
-      if (s.theme === 'light' || s.theme === 'dark') document.documentElement.dataset.theme = s.theme;
+      var t = localStorage.getItem('ed:theme');
+      if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
     } catch (e) {}
   </script>
   <link rel="stylesheet" href="css/style.css">

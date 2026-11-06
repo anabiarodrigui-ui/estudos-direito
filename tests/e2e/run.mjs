@@ -1,6 +1,6 @@
 /**
  * Teste ponta a ponta (Playwright + Chromium) simulando um tablet.
- * Uso: node tests/e2e/run.mjs [etapa]   (etapa: 1, 2, 3, 4 ou "all"; padrão all)
+ * Uso: node tests/e2e/run.mjs [etapa]   (etapa: 1, 2, 3, 4, 5 ou "all"; padrão all)
  * Requer o pacote "playwright" disponível no ambiente. Screenshots vão para tests/e2e/shots/.
  */
 import { createRequire } from 'node:module';
@@ -36,6 +36,12 @@ const run = (n) => STAGE === 'all' || STAGE === String(n);
 
 try {
   await page.goto(BASE);
+  // primeira vez: tela de criar conta
+  await page.waitForSelector('#lf');
+  await page.fill('#lf-email', 'ana@exemplo.com');
+  await page.fill('#lf-pw', 'direito2026');
+  await page.fill('#lf-pw2', 'direito2026');
+  await page.click('#lf-go');
   await page.waitForSelector('.page-head');
 
   if (run(1)) {
@@ -142,6 +148,7 @@ try {
   if (run(2)) await (await import('./stage2.mjs')).default({ page, step, expect, shot, clickText, BASE });
   if (run(3)) await (await import('./stage3.mjs')).default({ page, step, expect, shot, clickText, BASE });
   if (run(4)) await (await import('./stage4.mjs')).default({ page, step, expect, shot, clickText, BASE, ctx });
+  if (run(5)) await (await import('./stage5.mjs')).default({ page, step, expect, shot, clickText, BASE, ctx, browser });
 
   if (errors.length) { console.log('Erros no console:\n' + errors.join('\n')); process.exitCode = 1; }
   else console.log(`\n${passed} verificações OK, sem erros no console.`);

@@ -1,9 +1,10 @@
 # Estudos de Direito — organizador para as provas finais
 
-Aplicativo web (PWA) para organizar os estudos das provas finais de Direito, feito para usar principalmente em **tablet**. Ele funciona **offline**, pode ser **instalado na tela inicial** e guarda tudo **no próprio aparelho**. Não tem servidor nem login.
+Aplicativo web (PWA) para organizar os estudos das provas finais de Direito, feito para usar principalmente em **tablet**. Ele funciona **offline**, pode ser **instalado na tela inicial** e guarda tudo **no próprio aparelho**, **criptografado com a senha** de cada conta. Não tem servidor.
 
 | Seção | O que faz |
 |---|---|
+| **Conta** | Cadastro com e-mail e senha neste aparelho. Cada pessoa tem sua conta, com os dados separados e criptografados. |
 | **Início** | Cartões por matéria com dias até a prova, % estudado e flashcards pendentes, mais as tarefas de hoje. |
 | **Agenda** | Visões de mês, semana e dia; provas com contagem regressiva; tarefas e blocos de estudo (inclusive recorrentes); arrastar eventos; planejador diário com checklist; **Gerar plano de estudos**. |
 | **Resumos** | Biblioteca de guias em Markdown por matéria: índice navegável, busca em tudo, status "já li / estudar de novo", leitor com fonte ajustável, **marca-texto com o dedo** e anotações. |
@@ -54,9 +55,9 @@ python3 -m http.server 8080
 **Testes automatizados:**
 
 ```bash
-npm test             # testes unitários (Node 18+): datas, planejador, SM-2, Markdown, importação, geração de cartões
+npm test             # testes unitários (Node 18+): datas, planejador, SM-2, Markdown, importação, geração de cartões, contas e criptografia
 npm run test:e2e     # testes ponta a ponta num navegador simulando um tablet (precisa do Playwright: npm i -D playwright && npx playwright install chromium)
-npm run test:e2e 2   # só uma etapa (1 = agenda, 2 = resumos, 3 = flashcards, 4 = extras)
+npm run test:e2e 2   # só uma etapa (1 = agenda, 2 = resumos, 3 = flashcards, 4 = extras, 5 = contas)
 ```
 
 ---
@@ -108,8 +109,18 @@ Depois de instalado, o app abre em tela cheia, como um app comum, e **funciona s
 
 ## 4. Como usar
 
+### Conta (e-mail e senha)
+- Na primeira vez, toque em **Criar conta**: e-mail e senha (mínimo de 8 caracteres, com letras e números).
+- **Cada pessoa cria a própria conta.** Suas amigas podem abrir o mesmo link no aparelho delas e criar uma conta lá. Se usarem o *seu* tablet, também podem criar uma conta nele: cada conta só vê os próprios dados.
+- **Privacidade:** os dados ficam só no aparelho e são gravados **criptografados (AES-256)** com uma chave derivada da sua senha. A senha em si nunca é guardada. Sem a senha, os dados armazenados são ilegíveis.
+- **Manter a sessão aberta:** marcado, o app abre direto, sem pedir a senha. Desmarcado, pede a senha sempre que o app é aberto. **Sair** fica em Configurações (e em Mais).
+- **Trocar senha** e **Excluir minha conta** ficam em **Configurações → Conta**.
+- **Esqueceu a senha?** Ela **não pode ser recuperada**, justamente porque os dados são criptografados com ela. Na tela de entrada, "Esqueci minha senha" permite excluir a conta e criar outra; depois é só **importar o backup**. Por isso, faça backups.
+- A conta vale só para o aparelho onde foi criada. Para usar em outro tablet, crie a conta lá e importe um backup.
+- Se você já usava o app antes do login, os dados são movidos automaticamente para a primeira conta criada no aparelho.
+
 ### Primeiros passos
-1. Em **Início**, toque em **Carregar dados de exemplo** para ver o app funcionando (2 matérias, 2 guias, eventos e flashcards). Quando quiser, apague tudo em **Configurações → Dados de exemplo → Remover exemplos**: só os exemplos somem.
+1. Crie sua conta. Em **Início**, toque em **Carregar dados de exemplo** para ver o app funcionando (2 matérias, 2 guias, eventos e flashcards). Quando quiser, apague tudo em **Configurações → Dados de exemplo → Remover exemplos**: só os exemplos somem.
 2. Em **Matérias** (no menu **Mais** em retrato, ou na barra lateral em paisagem), cadastre cada matéria com **nome, cor, professor(a) e data/horário da prova**.
 
 ### Agenda
@@ -290,7 +301,8 @@ A **Revisão rápida** não altera esses valores; ela só registra acertos e err
 
 ## 9. Backup e segurança dos dados
 
-- Tudo fica no **IndexedDB** do navegador do tablet: nada é enviado para servidor nenhum. Por isso, **faça backup**.
+- Tudo fica no **IndexedDB** do navegador do tablet, criptografado por conta: nada é enviado para servidor nenhum. Por isso, **faça backup**.
+- **O arquivo de backup não é criptografado** (é um JSON legível, para você poder restaurá-lo mesmo se esquecer a senha). Guarde-o num lugar só seu.
 - **Configurações → Exportar backup (JSON)** baixa um arquivo `estudos-direito-backup-AAAA-MM-DD.json` com matérias, eventos, guias, destaques, flashcards (com o progresso), revisões, sessões e configurações. A chave da API **não** entra no backup. Guarde o arquivo no Google Drive, iCloud ou e-mail.
 - **Importar backup:**
   - **Substituir** apaga o que está no aparelho e restaura o backup (use para trocar de tablet ou recuperar dados).
@@ -313,7 +325,8 @@ icons/                   ícones do app (SVG + PNG 192/512/maskable)
 js/app.js                inicialização, navegação e roteamento (#/rota)
 js/sample.js             dados de exemplo (marcados com sample: true)
 js/core/                 lógica sem interface (testada no Node)
-  db.js                  IndexedDB + cache em memória, configurações, backup
+  db.js                  IndexedDB por conta, criptografia dos registros, cache em memória, backup
+  auth.js                contas locais: PBKDF2 (senha → chave), AES-GCM
   dates.js               datas em "AAAA-MM-DD", formatação pt-BR
   events.js              eventos, recorrência, provas, progresso
   planner.js             gerador do plano de estudos
@@ -323,6 +336,7 @@ js/core/                 lógica sem interface (testada no Node)
   cardgen.js             geração local de flashcards
   ai.js                  chamada à API da Anthropic (opcional)
   stats.js               estatísticas semanais
+js/views/login.js        tela de entrada, criar conta, sair, trocar senha, excluir conta
 js/ui/                   ícones, modais, destaques (marca-texto), componentes
 js/views/                uma tela por arquivo (dashboard, calendar, library, reader,
                          flashcards, study, pomodoro, stats, subjects, settings, more)
@@ -332,4 +346,4 @@ tests/e2e/               testes ponta a ponta com Playwright (tablet 820×1180)
 exemplos/                guia e flashcards de exemplo para importar
 ```
 
-**Modelo de dados** (coleções no IndexedDB): `subjects`, `events`, `guides`, `highlights`, `cards`, `reviews`, `sessions`. As configurações ficam em `localStorage["ed:settings"]`.
+**Modelo de dados** (coleções no IndexedDB `estudos-direito-u-<conta>`, cada registro gravado como `{id, iv, ct}` criptografado): `subjects`, `events`, `guides`, `highlights`, `cards`, `reviews`, `sessions`. As configurações de cada conta ficam em `localStorage["ed:u:<conta>:settings"]`; a lista de contas (e-mail, sal e verificador da senha, nunca a senha) em `localStorage["ed:accounts"]`.

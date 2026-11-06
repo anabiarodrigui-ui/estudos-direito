@@ -3,14 +3,14 @@
  * Estratégia: "cache primeiro" para os arquivos do app, atualizando em segundo plano.
  * Ao publicar uma nova versão, aumente CACHE_VERSION.
  */
-const CACHE_VERSION = 'estudos-v2';
+const CACHE_VERSION = 'estudos-v3';
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-512-maskable.png',
   'js/app.js', 'js/sample.js',
   'js/core/db.js', 'js/core/dates.js', 'js/core/events.js', 'js/core/planner.js', 'js/core/srs.js',
   'js/core/markdown.js', 'js/core/cardgen.js', 'js/core/importers.js', 'js/core/ai.js', 'js/core/stats.js',
-  'js/ui/dom.js', 'js/ui/icons.js', 'js/ui/common.js', 'js/ui/highlights.js',
+  'js/ui/dom.js', 'js/ui/icons.js', 'js/ui/common.js', 'js/ui/highlights.js', 'js/core/auth.js', 'js/views/login.js',
   'js/views/dashboard.js', 'js/views/calendar.js', 'js/views/subjects.js', 'js/views/more.js', 'js/views/settings.js',
   'js/views/library.js', 'js/views/reader.js', 'js/views/flashcards.js', 'js/views/study.js',
   'js/views/pomodoro.js', 'js/views/stats.js',

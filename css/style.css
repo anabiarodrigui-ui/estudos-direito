@@ -457,3 +457,21 @@ textarea.input.code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas
 .mb0 { margin-bottom: 0; }
 .kbd { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85em; background: var(--surface-2); padding: .1em .4em; border-radius: 4px; }
 pre.sample { background: var(--surface-2); padding: 12px; border-radius: 8px; overflow-x: auto; font-size: .85rem; white-space: pre-wrap; }
+
+/* ---------- tela de entrada (login) ---------- */
+body.locked .nav, body.locked .fab, body.locked .timer-pill { display: none !important; }
+body.locked .app { display: block; }
+body.locked .main { padding-bottom: 32px; }
+.login { min-height: calc(100dvh - 32px); display: flex; align-items: center; justify-content: center; }
+.login-card { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 16px; padding: 24px; }
+.login-card form { display: block; }
+.login-brand { display: flex; align-items: center; gap: 14px; }
+.login-brand img { border-radius: 14px; flex: none; }
+.login-brand h1 { font-size: 1.35rem; margin: 0; }
+.login-tabs { display: flex; }
+.login-tabs button { flex: 1; }
+.pw { display: flex; gap: 6px; }
+.pw .input { flex: 1; min-width: 0; }
+.login-error { color: var(--danger); background: var(--danger-soft); padding: 10px 12px; border-radius: var(--radius-sm); font-weight: 600; margin: 8px 0 0; }
+.login-note { display: flex; gap: 8px; align-items: flex-start; margin: 0; }
+.login-note svg.i { width: 18px; height: 18px; margin-top: 2px; }

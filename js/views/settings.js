@@ -6,6 +6,7 @@ import { icon } from '../ui/icons.js';
 import { todayISO, fmtBR } from '../core/dates.js';
 import { API_MODELS } from '../core/ai.js';
 import { refresh } from '../app.js';
+import { currentAccount, logout, openChangePassword, openDeleteAccount, getAccounts } from './login.js';
 
 export function render(root) {
   const s = db.getSettings();
@@ -18,6 +19,17 @@ export function render(root) {
     <div class="page-head"><h1>Configurações</h1></div>
 
     <div class="card stack">
+      <h2>Conta</h2>
+      <p class="mb0">${icon('user')} Conta: <b>${esc(currentAccount()?.email || '')}</b></p>
+      <p class="small muted">Seus dados ficam só neste aparelho, criptografados com a sua senha. ${getAccounts().length > 1 ? `Este aparelho tem ${getAccounts().length} contas; cada uma só vê os próprios dados.` : 'Outras pessoas podem criar a própria conta neste aparelho na tela de entrada.'}</p>
+      <div class="btn-row">
+        <button class="btn" data-logout>${icon('logout')} Sair</button>
+        <button class="btn" data-chpw>${icon('lock')} Trocar senha</button>
+        <button class="btn danger" data-delacc>${icon('trash')} Excluir minha conta</button>
+      </div>
+    </div>
+
+    <div class="card stack">
       <h2>Aparência</h2>
       <div class="seg" role="group" aria-label="Tema">
         ${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Escuro']].map(([v, l]) => `<button data-set-theme="${v}" aria-pressed="${s.theme === v}">${l}</button>`).join('')}
@@ -26,7 +38,7 @@ export function render(root) {
 
     <div class="card stack">
       <h2>Backup</h2>
-      <p class="small muted">Seus dados ficam só neste aparelho. Exporte um backup com frequência (por ex. para o Google Drive ou e-mail) e importe para restaurar ou passar para outro dispositivo.
+      <p class="small muted">Exporte um backup com frequência e importe para restaurar ou passar para outro dispositivo. <b>Atenção:</b> o arquivo de backup não é protegido por senha — guarde-o num lugar só seu (como o seu Google Drive).
       ${lastBackup ? `Último backup: <b>${fmtBR(lastBackup)}</b>.` : '<b>Você ainda não fez nenhum backup.</b>'}</p>
       <div class="btn-row">
         <button class="btn primary" data-export>${icon('download')} Exportar backup (JSON)</button>
@@ -67,11 +79,11 @@ export function render(root) {
 
     <div class="card stack">
       <h2>Zona de perigo</h2>
-      <p class="small muted">Apaga todas as matérias, eventos, guias, destaques, flashcards e registros deste aparelho. Faça um backup antes.</p>
+      <p class="small muted">Apaga todas as matérias, eventos, guias, destaques, flashcards e registros <b>da sua conta</b>. Faça um backup antes.</p>
       <button class="btn danger solid" data-wipe>${icon('trash')} Apagar tudo</button>
     </div>
 
-    <p class="small muted mt">Estudos de Direito · funciona offline · dados locais (IndexedDB).</p>
+    <p class="small muted mt">Estudos de Direito · funciona offline · dados locais e criptografados (IndexedDB + AES-GCM).</p>
   `;
 
   root.addEventListener('click', async (e) => {
@@ -86,6 +98,9 @@ export function render(root) {
       return refresh();
     }
     if (t.closest('[data-import]')) return importBackup();
+    if (t.closest('[data-logout]')) return logout();
+    if (t.closest('[data-chpw]')) return openChangePassword();
+    if (t.closest('[data-delacc]')) return openDeleteAccount();
     if (t.closest('[data-savekey]')) {
       const k = root.querySelector('[name=apiKey]').value.trim();
       if (k) ls.set('ed:apiKey', k);
@@ -99,7 +114,7 @@ export function render(root) {
       const m = await import('../sample.js'); await m.removeSample(); return toast('Exemplos removidos');
     }
     if (t.closest('[data-wipe]')) {
-      if (!(await confirmDialog('Tem certeza? <b>Tudo</b> será apagado deste aparelho. Isso não pode ser desfeito.', { ok: 'Apagar tudo', danger: true }))) return;
+      if (!(await confirmDialog('Tem certeza? <b>Todos os dados da sua conta</b> serão apagados. Isso não pode ser desfeito.', { ok: 'Apagar tudo', danger: true }))) return;
       await db.clearAll();
       toast('Todos os dados foram apagados');
     }

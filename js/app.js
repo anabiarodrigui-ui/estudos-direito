@@ -108,14 +108,16 @@ export function refresh() {
 
 export function applyTheme() {
   const t = db.getSettings().theme;
+  db.ls.raw.set('ed:theme', t); // lembra o tema também na tela de login
   if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
   else delete document.documentElement.dataset.theme;
   const dark = t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
   document.querySelectorAll('meta[name=theme-color]').forEach((m) => m.setAttribute('content', dark ? '#1c1b1e' : '#fbf7f8'));
 }
 
-async function start() {
-  await db.initDB();
+/** Depois de entrar na conta: monta a navegação e as telas. */
+async function boot() {
+  document.body.classList.remove('locked');
   applyTheme();
   db.subscribe((col) => { if (col === 'settings') applyTheme(); refresh(); });
   addEventListener('hashchange', route);
@@ -123,7 +125,9 @@ async function start() {
   await route();
   // Pomodoro em andamento continua aparecendo em qualquer tela.
   import('./views/pomodoro.js').then((m) => m.initPill?.());
+}
 
+async function start() {
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('sw.js').then((reg) => {
       reg.addEventListener('updatefound', () => {
@@ -134,6 +138,11 @@ async function start() {
       });
     }).catch((e) => console.warn('SW', e));
   }
+  const login = await import('./views/login.js');
+  if (await login.restoreSession()) return boot();
+  // sem sessão salva: mostra a tela de entrada
+  document.body.classList.add('locked');
+  login.renderLogin(freshRoot(), () => boot());
 }
 
 start().catch((e) => {

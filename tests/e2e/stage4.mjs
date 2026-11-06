@@ -11,7 +11,7 @@ export default async function ({ page, step, expect, shot, clickText, BASE }) {
     await page.goto(BASE + '#/');
     await page.waitForSelector('#timer-pill:not([hidden])');
     // simula o fim do foco
-    await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('ed:pomo')); s.endsAt = Date.now() + 300; localStorage.setItem('ed:pomo', JSON.stringify(s)); });
+    await page.evaluate(() => { const k = Object.keys(localStorage).find((x) => x.endsWith(':pomo')); const s = JSON.parse(localStorage.getItem(k)); s.endsAt = Date.now() + 300; localStorage.setItem(k, JSON.stringify(s)); });
     await page.waitForTimeout(1500);
     await page.goto(BASE + '#/pomodoro');
     await page.waitForSelector('text=estudados hoje');
