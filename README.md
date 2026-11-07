@@ -57,7 +57,7 @@ python3 -m http.server 8080
 ```bash
 npm test             # testes unitários (Node 18+): datas, planejador, SM-2, Markdown, importação, geração de cartões, contas e criptografia
 npm run test:e2e     # testes ponta a ponta num navegador simulando um tablet (precisa do Playwright: npm i -D playwright && npx playwright install chromium)
-npm run test:e2e 2   # só uma etapa (1 = agenda, 2 = resumos, 3 = flashcards, 4 = extras, 5 = contas)
+npm run test:e2e 2   # só uma etapa (1 = agenda, 2 = resumos, 3 = flashcards, 4 = extras, 5 = contas, 6 = rotina)
 ```
 
 ---
@@ -128,12 +128,17 @@ Depois de instalado, o app abre em tela cheia, como um app comum, e **funciona s
 - **+ (botão redondo)**: nova **tarefa/bloco de estudo** (horário, matéria, duração, repetir: todo dia, dias úteis ou toda semana) ou nova **prova**.
 - **Arrastar:** segure o dedo sobre um evento por meio segundo e arraste até outro dia. Num evento recorrente, só aquela ocorrência é movida. Arrastar a prova de uma matéria muda a data da prova.
 - **Planejador diário:** checklist do dia com barra de progresso, provas do dia em destaque e próximas provas com contagem regressiva.
-- **Gerar plano:** informe quantas horas por dia, a duração dos blocos, o intervalo, o horário de início e os dias de folga. O app:
-  - distribui blocos até a véspera de cada prova, dando **mais blocos às provas mais próximas** e às matérias com **menos conteúdo estudado**;
-  - reserva a **véspera de cada prova para revisão final**;
-  - usa os **guias ainda não lidos** como título dos blocos ("Estudar: Capítulo X"); quando eles acabam, os blocos viram "Revisão + flashcards";
-  - **desconta o tempo** das tarefas que você já tem e **evita sobrepor horários**;
-  - pode **substituir** um plano gerado antes, sem mexer nas suas tarefas manuais nem nos blocos já concluídos.
+- **Minha rotina** (botão no topo da Agenda, ou em Mais): cadastre uma vez seus **compromissos fixos**: aulas, deslocamento, terapia, cuidados pessoais, refeições, trabalho/estágio, exercício… com dias da semana e horário. Em **Meu dia**, diga a que horas cada dia começa e termina e marque os dias de **folga**. Escolha também a **folga antes e depois de cada compromisso** (ex.: 15 min para chegar em casa e respirar). A tela mostra quanto tempo livre sobra em cada dia.
+- A rotina aparece na agenda (semana e dia) **em tom discreto e tracejado**. O botão **Rotina** esconde ou mostra esses itens. Tocar num deles abre a edição.
+- **Gerar plano:** encaixa blocos de estudo **só nos horários livres da sua rotina**, sempre com horário marcado:
+  - nunca coloca estudo em cima de aulas, deslocamento, terapia etc. (nem na folga antes/depois), nem nos dias de folga, nem fora do horário do seu dia;
+  - respeita o **máximo de horas de estudo por dia** e as tarefas que você já tem;
+  - se um horário livre for menor que o bloco, usa um **bloco mais curto** (mínimo de 25 min);
+  - dá **mais blocos às provas mais próximas** e às matérias com **menos conteúdo estudado**, e reserva a **véspera de cada prova para revisão final**;
+  - usa os **guias ainda não lidos** como título dos blocos ("Estudar: Capítulo X"); quando acabam, vira "Revisão + flashcards";
+  - se gerado para hoje, só usa horários **a partir de agora**;
+  - pode **substituir** um plano gerado antes, sem mexer nas suas tarefas manuais nem nos blocos concluídos.
+- **Reorganizar atrasados:** quando ficam blocos de estudo não concluídos em dias anteriores, aparece um aviso na Agenda. O botão **Reorganizar** remarca cada um no próximo horário livre (primeiro dentro do limite diário; se não couber, em qualquer horário livre da rotina), sempre **antes da prova** da matéria. O que não couber é listado para você decidir.
 
 ### Resumos (guias de estudo)
 - **Importar guia:** escolha a matéria e **cole o Markdown** ou **escolha arquivos `.md`** (vários de uma vez). Marque "Separar em vários guias" para que cada `# Título` vire um capítulo. Com "Gerar flashcards automaticamente" marcado, você revisa os cartões sugeridos logo depois.
@@ -329,13 +334,14 @@ js/core/                 lógica sem interface (testada no Node)
   auth.js                contas locais: PBKDF2 (senha → chave), AES-GCM
   dates.js               datas em "AAAA-MM-DD", formatação pt-BR
   events.js              eventos, recorrência, provas, progresso
-  planner.js             gerador do plano de estudos
+  planner.js             plano de estudos: horários livres da rotina, blocos, reorganizar atrasados
   srs.js                 SM-2, fila de estudo, estatísticas, sequência
   markdown.js            renderizador de Markdown próprio
   importers.js           importação de flashcards e divisão de guias
   cardgen.js             geração local de flashcards
   ai.js                  chamada à API da Anthropic (opcional)
   stats.js               estatísticas semanais
+js/views/routine.js      "Minha rotina": compromissos fixos e horário de cada dia
 js/views/login.js        tela de entrada, criar conta, sair, trocar senha, excluir conta
 js/ui/                   ícones, modais, destaques (marca-texto), componentes
 js/views/                uma tela por arquivo (dashboard, calendar, library, reader,
@@ -346,4 +352,4 @@ tests/e2e/               testes ponta a ponta com Playwright (tablet 820×1180)
 exemplos/                guia e flashcards de exemplo para importar
 ```
 
-**Modelo de dados** (coleções no IndexedDB `estudos-direito-u-<conta>`, cada registro gravado como `{id, iv, ct}` criptografado): `subjects`, `events`, `guides`, `highlights`, `cards`, `reviews`, `sessions`. As configurações de cada conta ficam em `localStorage["ed:u:<conta>:settings"]`; a lista de contas (e-mail, sal e verificador da senha, nunca a senha) em `localStorage["ed:accounts"]`.
+**Modelo de dados** (coleções no IndexedDB `estudos-direito-u-<conta>`, cada registro gravado como `{id, iv, ct}` criptografado): `subjects`, `events`, `guides`, `highlights`, `cards`, `reviews`, `sessions`, `routine`. As configurações de cada conta ficam em `localStorage["ed:u:<conta>:settings"]`; a lista de contas (e-mail, sal e verificador da senha, nunca a senha) em `localStorage["ed:accounts"]`.

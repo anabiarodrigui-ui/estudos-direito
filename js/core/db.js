@@ -13,8 +13,8 @@ import { encryptObj, decryptObj } from './auth.js';
 export const LEGACY_DB_NAME = 'estudos-direito';   // versão sem contas (antes do login)
 export const AUTH_DB_NAME = 'estudos-direito-auth'; // chaves das sessões "manter conectada"
 const dbName = (userId) => `estudos-direito-u-${userId}`;
-export const DB_VERSION = 1;
-export const COLLECTIONS = ['subjects', 'events', 'guides', 'highlights', 'cards', 'reviews', 'sessions'];
+export const DB_VERSION = 2; // v2: coleção "routine" (compromissos fixos)
+export const COLLECTIONS = ['subjects', 'events', 'guides', 'highlights', 'cards', 'reviews', 'sessions', 'routine'];
 export const BACKUP_FORMAT = 'estudos-direito-backup';
 
 
@@ -232,8 +232,11 @@ export const DEFAULT_SETTINGS = {
   newCardsPerDay: 20,
   pomoFocus: 25, pomoShort: 5, pomoLong: 15, pomoCycles: 4,
   planDailyMinutes: 240, planBlockMinutes: 50, planBreakMinutes: 10, planStartTime: '08:00',
-  planSkipWeekdays: [0],    // não planejar aos domingos
+  planSkipWeekdays: [0],    // (antigo) dias sem estudo — substituído por dayWindows
   planReviewDayBefore: true,
+  dayWindows: null,         // [{start, end, off}] por dia da semana (0 = dom); null = derivar dos campos antigos
+  routineBuffer: 15,        // folga (min) antes e depois de cada compromisso da rotina
+  showRoutine: true,        // mostrar a rotina na agenda
   apiModel: 'claude-opus-5-5',
 };
 

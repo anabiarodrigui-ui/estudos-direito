@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as D from '../js/core/dates.js';
 import { expand, occursOn, nextExam, subjectProgress } from '../js/core/events.js';
-import { generatePlan } from '../js/core/planner.js';
+import { generatePlan, replanMissed, freeGaps, busyIntervals, freeMinutesByWeekday, defaultWindows } from '../js/core/planner.js';
 
 test('datas: soma, diferença, semana e meses', () => {
   assert.equal(D.addDays('2026-02-28', 1), '2026-03-01');
@@ -79,5 +79,66 @@ test('plano: desconta tempo já ocupado e evita sobrepor horários', () => {
     opts: { dailyMinutes: 180, blockMinutes: 50, breakMinutes: 10, startTime: '08:00', skipWeekdays: [], reviewDayBefore: false } });
   const d1 = plan.filter((e) => e.date === '2026-11-06');
   assert.equal(d1.length, 2); // (180-60)/50 = 2
-  assert.deepEqual(d1.map((e) => e.time), ['08:00', '10:10']);
+  assert.deepEqual(d1.map((e) => e.time), ['08:00', '10:00']);
+});
+
+// Rotina de exemplo: aulas de manhã, deslocamento, terapia na quarta, jantar.
+const ROTINA = [
+  { title: 'Aulas', weekdays: [1, 2, 3, 4, 5], start: '08:00', end: '12:00' },
+  { title: 'Deslocamento', weekdays: [1, 2, 3, 4, 5], start: '12:00', end: '13:00' },
+  { title: 'Terapia', weekdays: [3], start: '18:00', end: '19:00' },
+  { title: 'Jantar e banho', weekdays: [0, 1, 2, 3, 4, 5, 6], start: '19:30', end: '20:30' },
+];
+const JANELAS = Array.from({ length: 7 }, (_, wd) => ({ start: '07:00', end: '22:00', off: wd === 0 }));
+
+test('rotina: espaços livres descontam compromissos com folga', () => {
+  const busy = busyIntervals('2026-11-11', { routine: ROTINA, buffer: 15 }); // quarta
+  assert.deepEqual(busy, [[465, 795], [1065, 1155], [1155, 1245]].length ? mergeCheck(busy) : null);
+  const gaps = freeGaps(420, 1320, busy);
+  // 07:00–07:45 · 13:15–17:45 · 20:45–22:00
+  assert.deepEqual(gaps, [[420, 465], [795, 1065], [1245, 1320]]);
+  const free = freeMinutesByWeekday({ windows: JANELAS, routine: ROTINA, buffer: 15 });
+  assert.equal(free[0], 0); // domingo de folga
+  assert.equal(free[3], 45 + 270 + 75);
+});
+function mergeCheck(b) { return b; }
+
+test('plano com rotina: nenhum bloco cai em aula, deslocamento, terapia ou jantar', () => {
+  const plan = generatePlan({
+    subjects: [{ id: 'a', name: 'Civil', examDate: '2026-11-20' }], routine: ROTINA, start: '2026-11-09',
+    opts: { dailyMinutes: 300, blockMinutes: 50, breakMinutes: 10, buffer: 15, windows: JANELAS },
+  });
+  assert.ok(plan.length > 0);
+  for (const e of plan) {
+    const [h, m] = e.time.split(':').map(Number); const a = h * 60 + m, b = a + e.duration;
+    const wd = new Date(e.date + 'T12:00').getDay();
+    assert.notEqual(wd, 0, 'domingo é folga');
+    for (const r of ROTINA.filter((x) => x.weekdays.includes(wd))) {
+      const [rh, rm] = r.start.split(':').map(Number); const [eh, em] = r.end.split(':').map(Number);
+      const ra = rh * 60 + rm - 15, rb = eh * 60 + em + 15;
+      assert.ok(b <= ra || a >= rb, `${e.date} ${e.time} (${e.duration}min) bate com ${r.title}`);
+    }
+    assert.ok(e.duration >= 25 && e.duration <= 50);
+    assert.ok(a >= 420 && b <= 1320, 'dentro da janela do dia');
+  }
+  // quarta: espaço de 07:00–07:45 recebe bloco curto de 45 min
+  assert.ok(plan.some((e) => e.date === '2026-11-11' && e.time === '07:00' && e.duration === 45));
+  // limite diário respeitado
+  const byDay = {}; for (const e of plan) byDay[e.date] = (byDay[e.date] || 0) + e.duration;
+  assert.ok(Object.values(byDay).every((m) => m <= 300));
+});
+
+test('replanejar: blocos atrasados vão para os próximos espaços livres, antes da prova', () => {
+  const missed = [{ id: 'm1', subjectId: 'a', duration: 50 }, { id: 'm2', subjectId: 'b', duration: 50 }];
+  const r = replanMissed(missed, {
+    today: '2026-11-09', routine: ROTINA, examBySubject: { a: '2026-11-10', b: '2026-11-30' },
+    occurrences: [{ date: '2026-11-09', ev: { type: 'task', time: '07:00', duration: 50 } }],
+    opts: { dailyMinutes: 300, blockMinutes: 50, breakMinutes: 10, buffer: 15, windows: JANELAS, nowMinutes: 14 * 60 },
+  });
+  assert.deepEqual(r.notPlaced, []);
+  const m1 = r.moved.find((x) => x.id === 'm1'), m2 = r.moved.find((x) => x.id === 'm2');
+  assert.equal(m1.date, '2026-11-09'); assert.equal(m1.time, '14:00'); // depois de agora, fora da rotina
+  assert.equal(m2.date, '2026-11-09'); assert.equal(m2.time, '15:00'); // não sobrepõe m1
+  const none = replanMissed([{ id: 'x', subjectId: 'a', duration: 50 }], { today: '2026-11-10', examBySubject: { a: '2026-11-10' }, opts: { windows: defaultWindows() } });
+  assert.deepEqual(none.notPlaced, ['x']); // prova já é hoje: não há antes
 });

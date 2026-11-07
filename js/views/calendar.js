@@ -7,20 +7,22 @@
 import * as db from '../core/db.js';
 import { esc, openModal, formData, toast, confirmDialog, enableLongPressDrag } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { subjectOptions, subjectColor, subjectName, subjects } from '../ui/common.js';
+import { subjectOptions, subjectColor, subjectName, subjects, dayWindows } from '../ui/common.js';
 import { go } from '../app.js';
 import {
-  todayISO, addDays, addMonths, weekStart, monthStart, range, fmtLong, fmtMonth, fmtShort,
+  todayISO, addDays, addMonths, weekStart, monthStart, range, fmtLong, fmtMonth, fmtShort, timeToMin,
   WEEKDAYS_SHORT, diffDays, countdownText, fmtMinutes, parseISO, fmtBR,
 } from '../core/dates.js';
 import { expand, subjectProgress } from '../core/events.js';
-import { generatePlan } from '../core/planner.js';
+import { generatePlan, replanMissed, routineOn, freeMinutesByWeekday } from '../core/planner.js';
 
 export function render(root, { params }) {
   const today = todayISO();
   const view = params.view || (innerWidth < 600 ? 'day' : 'month');
   const date = params.date || today;
   const filter = params.s || '';
+  const showRoutine = db.getSettings().showRoutine !== false;
+  const missed = missedBlocks(today);
 
   const nav = (v, d) => go('agenda', { view: v, date: d, ...(filter ? { s: filter } : {}) }, { replace: true });
   const step = view === 'month' ? (n) => addMonths(date, n) : view === 'week' ? (n) => addDays(date, 7 * n) : (n) => addDays(date, n);
@@ -30,8 +32,11 @@ export function render(root, { params }) {
   root.innerHTML = `
     <div class="page-head"><h1>Agenda</h1>
       <div class="actions">
+        <button class="btn" data-routine-page>${icon('list')} Minha rotina</button>
         <button class="btn" data-plan>${icon('wand')} Gerar plano</button>
       </div></div>
+    ${missed.length ? `<div class="card missed-banner"><span class="grow"><b>${missed.length} bloco(s) de estudo ficaram para trás.</b><br><span class="small muted">Posso encaixá-los nos próximos horários livres da sua rotina.</span></span>
+      <button class="btn primary" data-replan>${icon('reset')} Reorganizar</button></div>` : ''}
     <div class="cal-toolbar">
       <div class="seg" role="group" aria-label="Visão">
         ${[['month', 'Mês'], ['week', 'Semana'], ['day', 'Dia']].map(([v, l]) => `<button data-view="${v}" aria-pressed="${v === view}">${l}</button>`).join('')}
@@ -40,6 +45,7 @@ export function render(root, { params }) {
       <button class="btn small" data-today>Hoje</button>
       <button class="btn icon" data-step="1" aria-label="Próximo">${icon('right')}</button>
       <div class="title">${title}</div>
+      ${view !== 'month' ? `<button class="chip" data-toggle-routine aria-pressed="${showRoutine}">${icon('list')} Rotina</button>` : ''}
     </div>
     <div id="cal-body"></div>
     <button class="fab" data-add aria-label="Nova tarefa">${icon('plus')}</button>
@@ -48,8 +54,8 @@ export function render(root, { params }) {
   const occFilter = (o) => !filter || o.ev.subjectId === filter;
 
   if (view === 'month') renderMonth(body, date, today, occFilter);
-  else if (view === 'week') renderWeek(body, date, today, occFilter);
-  else renderDay(body, date, today);
+  else if (view === 'week') renderWeek(body, date, today, occFilter, showRoutine);
+  else renderDay(body, date, today, showRoutine);
 
   root.addEventListener('click', async (e) => {
     const t = e.target;
@@ -57,6 +63,11 @@ export function render(root, { params }) {
     if (t.closest('[data-step]')) return nav(view, step(+t.closest('[data-step]').dataset.step));
     if (t.closest('[data-today]')) return nav(view, today);
     if (t.closest('[data-plan]')) return openPlanDialog();
+    if (t.closest('[data-routine-page]')) return go('rotina');
+    if (t.closest('[data-replan]')) return replan(missed);
+    if (t.closest('[data-toggle-routine]')) return db.setSettings({ showRoutine: !showRoutine });
+    const rt = t.closest('[data-routine]');
+    if (rt) { e.stopPropagation(); return import('./routine.js').then((m) => m.openRoutineForm(db.get('routine', rt.dataset.routine))); }
     if (t.closest('[data-add]')) return openEventForm(null, view === 'day' ? date : (date < today && view !== 'month' ? today : date));
     const occ = t.closest('[data-occ]');
     if (occ) { e.stopPropagation(); return openOccurrence(occ.dataset.ev, occ.dataset.date); }
@@ -74,7 +85,21 @@ export function render(root, { params }) {
 }
 
 // ---------------------------------------------------------------------------
+/** Compromissos da rotina num dia, no formato das ocorrências (para listar junto). */
+function routineOccs(date) {
+  return routineOn(db.all('routine'), date).map((r) => ({
+    key: 'r:' + r.item.id + '@' + date, date, routine: true,
+    ev: { id: r.item.id, type: 'routine', title: r.item.title, time: r.item.start, end: r.item.end },
+  }));
+}
+const byTime = (a, b) => (a.ev.time || '99:99') < (b.ev.time || '99:99') ? -1 : (a.ev.time || '99:99') > (b.ev.time || '99:99') ? 1 : 0;
+
+function routineChip(o) {
+  return `<div class="ev routine" data-routine="${o.ev.id}" title="${esc(o.ev.title)} (rotina)"><span>${o.ev.time}</span>${esc(o.ev.title)}</div>`;
+}
+
 function chip(o) {
+  if (o.routine) return routineChip(o);
   const ev = o.ev;
   const c = ev.type === 'exam' ? 'var(--danger)' : subjectColor(ev.subjectId);
   return `<div class="ev ${ev.type === 'exam' ? 'exam' : ''} ${o.done ? 'done' : ''}" style="--c:${c}" data-occ data-ev="${ev.id}" data-date="${o.date}" title="${esc(ev.title)}">
@@ -105,11 +130,13 @@ function renderMonth(el, date, today, occFilter) {
   <p class="small muted mt">Dica: toque num dia para ver o planejador; segure um evento e arraste para outro dia.</p>`;
 }
 
-function renderWeek(el, date, today, occFilter) {
+function renderWeek(el, date, today, occFilter, showRoutine) {
   const ws = weekStart(date);
   const days = range(ws, addDays(ws, 6));
   const occ = expand(db.all('events'), subjects(), days[0], days[6]).filter(occFilter);
+  if (showRoutine) for (const d of days) occ.push(...routineOccs(d));
   const byDay = groupBy(occ, (o) => o.date);
+  for (const d in byDay) byDay[d].sort((a, b) => (a.ev.type === 'exam') !== (b.ev.type === 'exam') ? (a.ev.type === 'exam' ? -1 : 1) : byTime(a, b));
   el.innerHTML = `<div class="week">${days.map((d) => {
     const dt = parseISO(d);
     return `<div class="wday ${d === today ? 'today' : ''}" data-date-drop="${d}">
@@ -122,8 +149,9 @@ function renderWeek(el, date, today, occFilter) {
 }
 
 /** Planejador diário: provas do dia, checklist e barra de progresso. */
-function renderDay(el, date, today) {
+function renderDay(el, date, today, showRoutine) {
   const occ = expand(db.all('events'), subjects(), date, date);
+  const timeline = [...occ.filter((o) => o.ev.type === 'task'), ...(showRoutine ? routineOccs(date) : [])].sort(byTime);
   const exams = occ.filter((o) => o.ev.type === 'exam');
   const tasks = occ.filter((o) => o.ev.type === 'task');
   const done = tasks.filter((o) => o.done).length;
@@ -139,7 +167,7 @@ function renderDay(el, date, today) {
       <div class="progress mt" style="--c:var(--ok)"><span style="width:${pct}%"></span></div>
     </div>
     <div class="mt" data-date-drop="${date}">
-      ${tasks.length ? tasks.map((o) => taskRow(o)).join('') : `<div class="empty">Nada planejado para este dia.<br><button class="btn primary" data-add-on="${date}">${icon('plus')} Adicionar tarefa</button></div>`}
+      ${timeline.length ? timeline.map((o) => (o.routine ? routineRow(o) : taskRow(o))).join('') : `<div class="empty">Nada planejado para este dia.<br><button class="btn primary" data-add-on="${date}">${icon('plus')} Adicionar tarefa</button></div>`}
     </div>
     ${upcoming.length ? `<div class="section"><h2>Próximas provas</h2></div>
       <div class="card"><ul class="list">${upcoming.map((o) => `<li><button class="row" data-goday="${o.date}">
@@ -147,6 +175,13 @@ function renderDay(el, date, today) {
         <span class="grow"><span class="title">${esc(o.ev.title)}</span><br><span class="small muted">${fmtBR(o.date)}</span></span>
         <span class="countdown ${diffDays(today, o.date) <= 7 ? 'soon' : ''}">${countdownText(diffDays(today, o.date))}</span></button></li>`).join('')}</ul></div>` : ''}
   `;
+}
+
+function routineRow(o) {
+  return `<div class="task routine" data-routine="${o.ev.id}" role="button" tabindex="0">
+    <span class="tick" aria-hidden="true"></span>
+    <div class="grow"><div class="t">${esc(o.ev.title)}</div><div class="s">${o.ev.time}–${o.ev.end} · rotina</div></div>
+  </div>`;
 }
 
 export function taskRow(o) {
@@ -297,7 +332,14 @@ async function deleteEvent(ev, date) {
 }
 
 // ---------------------------------------------------------------------------
-// Gerar plano de estudos
+// Gerar plano de estudos (respeitando a rotina)
+
+function planOpts(s = db.getSettings()) {
+  return {
+    dailyMinutes: s.planDailyMinutes, blockMinutes: s.planBlockMinutes, breakMinutes: s.planBreakMinutes,
+    buffer: s.routineBuffer ?? 15, windows: dayWindows(), reviewDayBefore: s.planReviewDayBefore,
+  };
+}
 
 function openPlanDialog() {
   const s = db.getSettings();
@@ -306,54 +348,93 @@ function openPlanDialog() {
   if (!subs.length) {
     return openModal({ title: 'Gerar plano de estudos', body: `<p>Para gerar o plano, cadastre as matérias com a <b>data da prova</b> (em Matérias).</p>`, actions: [{ label: 'Ir para Matérias', cls: 'primary', onClick: () => go('materias') }] });
   }
+  const routine = db.all('routine');
+  const free = freeMinutesByWeekday({ windows: dayWindows(), routine, buffer: s.routineBuffer });
   const prevGenerated = db.where('events', (e) => e.generated && !e.done && e.date >= today).length;
   openModal({
     title: 'Gerar plano de estudos',
     body: `<form id="pf">
-      <p class="muted small">Distribui blocos de estudo nos dias livres até cada prova, priorizando as provas mais próximas e as matérias com menos conteúdo estudado. Os títulos seguem seus guias ainda não lidos. A véspera de cada prova é reservada para revisão final.</p>
-      <div class="card" style="box-shadow:none">${subs.map((x) => `<div class="spread small"><span><span class="dot" style="background:${x.color}"></span> ${esc(x.name)}</span><span class="muted">${fmtBR(x.examDate)} · ${countdownText(diffDays(today, x.examDate))}</span></div>`).join('')}</div>
+      <p class="muted small">Encaixa blocos de estudo <b>só nos horários livres da sua rotina</b>, até cada prova, priorizando as provas mais próximas e as matérias com menos conteúdo estudado. Os títulos seguem seus guias ainda não lidos. A véspera de cada prova é reservada para revisão final.</p>
+      <div class="card plan-routine ${routine.length ? '' : 'warn'}" style="box-shadow:none">
+        ${routine.length
+          ? `<div class="spread"><span>${icon('list')} <b>${routine.length}</b> compromisso(s) na rotina · <b>${fmtMinutes(free.reduce((x, y) => x + y, 0))}</b> livres por semana</span>`
+          : `<div class="spread"><span>${icon('list')} <b>Sua rotina ainda está vazia.</b> Cadastre aulas, deslocamento e outros compromissos para o plano não marcar estudo nesses horários.</span>`}
+          <button type="button" class="btn small" data-goroutine>Editar rotina</button></div>
+      </div>
+      <div class="card mt" style="box-shadow:none">${subs.map((x) => `<div class="spread small"><span><span class="dot" style="background:${x.color}"></span> ${esc(x.name)}</span><span class="muted">${fmtBR(x.examDate)} · ${countdownText(diffDays(today, x.examDate))}</span></div>`).join('')}</div>
       <div class="field-row mt">
         <label class="field"><span>Começar em</span><input class="input" type="date" name="start" value="${today}"></label>
-        <label class="field"><span>Início do dia</span><input class="input" type="time" name="startTime" value="${s.planStartTime}"></label>
+        <label class="field"><span>Máximo de estudo por dia (horas)</span><input class="input" type="number" name="hours" min="0.5" max="14" step="0.5" value="${s.planDailyMinutes / 60}"></label>
       </div>
       <div class="field-row">
-        <label class="field"><span>Horas de estudo por dia</span><input class="input" type="number" name="hours" min="0.5" max="14" step="0.5" value="${s.planDailyMinutes / 60}"></label>
-        <label class="field"><span>Duração do bloco (min)</span><input class="input" type="number" name="block" min="15" max="180" step="5" value="${s.planBlockMinutes}"></label>
+        <label class="field"><span>Duração do bloco (min)</span><input class="input" type="number" name="block" min="25" max="180" step="5" value="${s.planBlockMinutes}"></label>
+        <label class="field"><span>Intervalo entre blocos (min)</span><input class="input" type="number" name="brk" min="0" max="60" step="5" value="${s.planBreakMinutes}"></label>
       </div>
-      <label class="field"><span>Intervalo entre blocos (min)</span><input class="input" type="number" name="brk" min="0" max="60" step="5" value="${s.planBreakMinutes}"></label>
-      <div class="field"><span>Não estudar em</span><div class="weekday-picks">
-        ${[1, 2, 3, 4, 5, 6, 0].map((w) => `<label><input type="checkbox" name="skip" value="${w}" ${s.planSkipWeekdays.includes(w) ? 'checked' : ''}><span>${WEEKDAYS_SHORT[w]}</span></label>`).join('')}
-      </div></div>
+      <p class="small muted">Se um horário livre for menor que o bloco, o app usa um bloco mais curto (mínimo de 25 min). Os dias de folga e o início/fim de cada dia ficam em <b>Minha rotina</b>.</p>
       <label class="check"><input type="checkbox" name="review" ${s.planReviewDayBefore ? 'checked' : ''}> Reservar a véspera de cada prova para revisão final</label>
       ${prevGenerated ? `<label class="check"><input type="checkbox" name="replace" checked> Substituir o plano gerado anteriormente (${prevGenerated} blocos futuros não concluídos)</label>` : ''}
     </form>`,
+    onOpen: (el, close) => el.querySelector('[data-goroutine]').addEventListener('click', () => { close(); go('rotina'); }),
     actions: [
       { label: 'Cancelar' },
       { label: `${icon('wand')} Gerar`, cls: 'primary', onClick: async (close, el) => {
         const d = formData(el.querySelector('#pf'));
-        const opts = {
-          dailyMinutes: Math.round((+d.hours || 4) * 60), blockMinutes: +d.block || 50, breakMinutes: +d.brk || 0,
-          startTime: d.startTime || '08:00', skipWeekdays: (d.skip || []).map(Number), reviewDayBefore: !!d.review,
-        };
-        db.setSettings({ planDailyMinutes: opts.dailyMinutes, planBlockMinutes: opts.blockMinutes, planBreakMinutes: opts.breakMinutes, planStartTime: opts.startTime, planSkipWeekdays: opts.skipWeekdays, planReviewDayBefore: opts.reviewDayBefore });
-        if (d.replace) await db.removeMany('events', db.where('events', (e) => e.generated && !e.done && e.date >= today).map((e) => e.id));
+        db.setSettings({ planDailyMinutes: Math.round((+d.hours || 4) * 60), planBlockMinutes: Math.max(25, +d.block || 50), planBreakMinutes: Math.max(0, +d.brk || 0), planReviewDayBefore: !!d.review });
+        const opts = planOpts();
         const start = d.start || today;
+        // hoje: só a partir de agora (arredondado para os próximos 5 min)
+        if (start === today) { const now = new Date(); opts.startFrom = Math.ceil((now.getHours() * 60 + now.getMinutes()) / 5) * 5; }
+        if (d.replace) await db.removeMany('events', db.where('events', (e) => e.generated && !e.done && e.date >= today).map((e) => e.id));
         const lastExam = subs.map((x) => x.examDate).sort().at(-1);
         const guides = db.all('guides').sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         const plan = generatePlan({
-          subjects: subs,
-          occurrences: expand(db.all('events'), [], start, lastExam),
+          subjects: subs, routine,
+          occurrences: expand(db.all('events'), subjects(), start, lastExam),
           guidesBySubject: Object.fromEntries(subs.map((x) => [x.id, guides.filter((g) => g.subjectId === x.id)])),
           progressBySubject: Object.fromEntries(subs.map((x) => [x.id, subjectProgress(x, db.all('guides'), db.all('events'))])),
           start, opts,
         });
-        if (!plan.length) { toast('Não há tempo livre para planejar com essas opções.'); return false; }
+        if (!plan.length) { toast('Não há horário livre para estudar com essa rotina e essas opções.'); return false; }
         await db.putMany('events', plan);
         toast(`Plano criado: ${plan.length} blocos de estudo`);
         go('agenda', { view: 'week', date: start });
       } },
     ],
   });
+}
+
+// ---------------------------------------------------------------------------
+// Reorganizar blocos que ficaram para trás
+
+/** Blocos de estudo (com matéria, sem repetição) de dias anteriores que não foram concluídos. */
+function missedBlocks(today) {
+  return db.where('events', (e) => e.type === 'task' && !e.recurrence?.freq && !e.done && e.subjectId && e.date < today);
+}
+
+async function replan(missed) {
+  const today = todayISO();
+  const now = new Date();
+  const examBySubject = Object.fromEntries(subjects().filter((x) => x.examDate).map((x) => [x.id, x.examDate]));
+  const missedIds = new Set(missed.map((m) => m.id));
+  const { moved, notPlaced } = replanMissed(missed, {
+    today, routine: db.all('routine'), examBySubject,
+    occurrences: expand(db.all('events').filter((e) => !missedIds.has(e.id)), subjects(), today, addDays(today, 60)),
+    opts: { ...planOpts(), nowMinutes: now.getHours() * 60 + now.getMinutes() },
+  });
+  const updated = moved.map((m) => ({ ...db.get('events', m.id), date: m.date, time: m.time, duration: m.duration }));
+  if (updated.length) await db.putMany('events', updated);
+  if (notPlaced.length) {
+    openModal({
+      title: 'Reorganizar atrasados',
+      body: `<p>${updated.length ? `${updated.length} bloco(s) remarcado(s). ` : ''}<b>${notPlaced.length} bloco(s) não couberam</b> antes da prova da matéria (ou não há horário livre nos próximos 60 dias).</p>
+        <ul>${notPlaced.slice(0, 8).map((id) => `<li>${esc(db.get('events', id)?.title || '')}</li>`).join('')}</ul>
+        <p class="small muted">Você pode apagá-los ou deixá-los como estão. Dica: aumente o máximo de estudo por dia ou revise sua rotina.</p>`,
+      actions: [
+        { label: 'Deixar como estão' },
+        { label: `${icon('trash')} Apagar esses blocos`, cls: 'danger', onClick: async () => { await db.removeMany('events', notPlaced); toast('Blocos apagados'); } },
+      ],
+    });
+  } else toast(`${updated.length} bloco(s) remarcado(s) nos próximos horários livres`);
 }
 
 function groupBy(arr, fn) {

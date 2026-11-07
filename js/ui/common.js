@@ -1,6 +1,7 @@
 /** Componentes e consultas compartilhados entre telas. */
 import * as db from '../core/db.js';
 import { esc } from './dom.js';
+import { defaultWindows } from '../core/planner.js';
 
 /**
  * Cores das matérias: 5 tons bem diferentes de rosa, de azul e de roxo
@@ -45,3 +46,16 @@ export function activeDates() {
   }
   return [...set];
 }
+
+/** Janelas do dia (início/fim/folga) por dia da semana, das configurações da conta. */
+export function dayWindows() {
+  const s = db.getSettings();
+  return s.dayWindows || defaultWindows({ startTime: s.planStartTime, skipWeekdays: s.planSkipWeekdays, end: '22:00' });
+}
+
+/** Tipos de compromisso da rotina (nome sugerido e cor discreta). */
+export const ROUTINE_KINDS = [
+  ['aula', 'Aula'], ['deslocamento', 'Deslocamento'], ['terapia', 'Terapia'], ['cuidados', 'Cuidados pessoais'],
+  ['refeicao', 'Refeição'], ['trabalho', 'Trabalho / estágio'], ['exercicio', 'Exercício'], ['outro', 'Outro'],
+];
+export const routineKindLabel = (k) => (ROUTINE_KINDS.find((x) => x[0] === k) || ROUTINE_KINDS.at(-1))[1];

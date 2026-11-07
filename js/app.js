@@ -12,6 +12,7 @@ const ROUTES = {
   '': () => import('./views/dashboard.js'),
   agenda: () => import('./views/calendar.js'),
   materias: () => import('./views/subjects.js'),
+  rotina: () => import('./views/routine.js'),
   resumos: () => import('./views/library.js'),
   guia: () => import('./views/reader.js'),
   cartoes: () => import('./views/flashcards.js'),
@@ -35,6 +36,8 @@ const NAV = [
 ];
 // Telas acessadas a partir de "Mais" acendem o ícone "Mais" na barra inferior.
 const UNDER_MORE = ['pomodoro', 'estatisticas', 'materias', 'config'];
+// Telas abertas a partir da Agenda acendem o ícone da Agenda.
+const UNDER_AGENDA = ['rotina'];
 
 /** Lê a rota atual: { path, id, params } */
 export function currentRoute() {
@@ -54,7 +57,7 @@ export function go(path, params = null, { replace = false } = {}) {
 
 function renderNav() {
   const { path } = currentRoute();
-  const activePath = path === 'guia' ? 'resumos' : path === 'estudar' ? 'cartoes' : path;
+  const activePath = path === 'guia' ? 'resumos' : path === 'estudar' ? 'cartoes' : UNDER_AGENDA.includes(path) ? 'agenda' : path;
   const nav = document.getElementById('nav');
   nav.innerHTML = `<div class="brand"><img src="icons/icon.svg" alt=""> Estudos</div>` + NAV.map((n) => {
     const cur = n.path === activePath || (n.more && UNDER_MORE.includes(activePath) && innerWidth < 900);

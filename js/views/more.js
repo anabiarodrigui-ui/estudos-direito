@@ -7,6 +7,7 @@ const ITEMS = [
   ['pomodoro', 'timer', 'Pomodoro', 'Timer de foco vinculado à matéria'],
   ['estatisticas', 'chart', 'Estatísticas', 'Horas, flashcards e tarefas da semana'],
   ['materias', 'subjects', 'Matérias', 'Cadastrar matérias e datas de prova'],
+  ['rotina', 'list', 'Minha rotina', 'Aulas, deslocamento e outros compromissos fixos'],
   ['config', 'settings', 'Configurações', 'Tema, backup, chave da API, dados de exemplo'],
 ];
 
