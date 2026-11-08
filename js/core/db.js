@@ -235,6 +235,8 @@ export const DEFAULT_SETTINGS = {
   planSkipWeekdays: [0],    // (antigo) dias sem estudo — substituído por dayWindows
   planReviewDayBefore: true,
   dayWindows: null,         // [{start, end, off}] por dia da semana (0 = dom); null = derivar dos campos antigos
+  planMaxSession: 0,        // duração máxima de uma sessão sem pausa (0 = sem limite)
+  planGenericMinutes: 60,   // duração das sessões "Estudar <matéria>" (sem guia)
   routineBuffer: 15,        // folga (min) antes e depois de cada compromisso da rotina
   showRoutine: true,        // mostrar a rotina na agenda
   apiModel: 'claude-opus-5-5',

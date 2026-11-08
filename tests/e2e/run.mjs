@@ -1,6 +1,6 @@
 /**
  * Teste ponta a ponta (Playwright + Chromium) simulando um tablet.
- * Uso: node tests/e2e/run.mjs [etapa]   (etapa: 1 a 6 ou "all"; padrão all)
+ * Uso: node tests/e2e/run.mjs [etapa]   (etapa: 1 a 7 ou "all"; padrão all)
  * Requer o pacote "playwright" disponível no ambiente. Screenshots vão para tests/e2e/shots/.
  */
 import { createRequire } from 'node:module';
@@ -108,7 +108,8 @@ try {
       await clickText('button', 'Gerar plano');
       await clickText('.sheet-foot button', 'Gerar');
       await page.waitForSelector('.week');
-      expect(await page.locator('.ev', { hasText: 'Estudar:' }).count() + await page.locator('.ev', { hasText: 'Revisão' }).count() > 0, 'plano vazio');
+      const n = await page.evaluate(async () => (await import('/js/core/db.js')).all('events').filter((e) => e.generated).length);
+      expect(n > 0, 'plano vazio');
       await shot('1-plano');
     });
     await step('tema escuro e backup', async () => {
@@ -150,6 +151,7 @@ try {
   if (run(4)) await (await import('./stage4.mjs')).default({ page, step, expect, shot, clickText, BASE, ctx });
   if (run(5)) await (await import('./stage5.mjs')).default({ page, step, expect, shot, clickText, BASE, ctx, browser });
   if (run(6)) await (await import('./stage6.mjs')).default({ page, step, expect, shot, clickText, BASE });
+  if (run(7)) await (await import('./stage7.mjs')).default({ page, step, expect, shot, clickText, BASE });
 
   if (errors.length) { console.log('Erros no console:\n' + errors.join('\n')); process.exitCode = 1; }
   else console.log(`\n${passed} verificações OK, sem erros no console.`);

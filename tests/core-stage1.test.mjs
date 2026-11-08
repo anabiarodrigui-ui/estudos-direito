@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as D from '../js/core/dates.js';
 import { expand, occursOn, nextExam, subjectProgress } from '../js/core/events.js';
-import { generatePlan, replanMissed, freeGaps, busyIntervals, freeMinutesByWeekday, defaultWindows } from '../js/core/planner.js';
+import { generatePlan, replanMissed, freeGaps, busyIntervals, freeMinutesByWeekday, defaultWindows, estimateStudyMinutes, guideMinutes } from '../js/core/planner.js';
 
 test('datas: soma, diferença, semana e meses', () => {
   assert.equal(D.addDays('2026-02-28', 1), '2026-03-01');
@@ -53,33 +53,63 @@ test('plano: prioriza a prova mais próxima, reserva a véspera e respeita domin
   ];
   const plan = generatePlan({
     subjects, start: '2026-11-06',
-    guidesBySubject: { a: [{ title: 'Contratos', status: 'novo' }, { title: 'Lido', status: 'lido' }] },
-    opts: { dailyMinutes: 200, blockMinutes: 50, breakMinutes: 10, startTime: '08:00', skipWeekdays: [0], reviewDayBefore: true },
+    guidesBySubject: { a: [{ id: 'g1', title: 'Contratos', status: 'novo', minutes: 90 }, { id: 'g2', title: 'Lido', status: 'lido', minutes: 60 }] },
+    opts: { dailyMinutes: 200, breakMinutes: 10, startTime: '08:00', skipWeekdays: [0], reviewDayBefore: true },
   });
   assert.ok(plan.length > 0);
   assert.ok(plan.every((e) => e.generated && e.type === 'task'));
   assert.ok(!plan.some((e) => D.weekday(e.date) === 0), 'não deve haver blocos no domingo');
   assert.ok(!plan.some((e) => e.date >= '2026-11-20'));
   const before = plan.filter((e) => e.date < '2026-11-12');
-  const a = before.filter((e) => e.subjectId === 'a').length, b = before.filter((e) => e.subjectId === 'b').length;
-  assert.ok(a > b, `antes da 1ª prova Civil deve ter mais blocos (${a} x ${b})`);
+  const min = (id) => before.filter((e) => e.subjectId === id).reduce((x, e) => x + e.duration, 0);
+  assert.ok(min('a') > min('b'), `antes da 1ª prova Civil deve ter mais tempo (${min('a')} x ${min('b')})`);
   const eve = plan.filter((e) => e.date === '2026-11-11');
   assert.ok(eve[0].title.startsWith('Revisão final — Civil'));
-  assert.ok(plan.some((e) => e.title.includes('Estudar: Contratos')));
+  // o guia ocupa exatamente o tempo dele (90 min), sem bloco fixo
+  const guide = plan.filter((e) => e.guideId === 'g1');
+  assert.equal(guide.reduce((x, e) => x + e.duration, 0), 90);
+  assert.ok(guide[0].title.startsWith('Estudar: Contratos'));
   assert.ok(!plan.some((e) => e.title.includes('Lido')), 'guias já lidos não entram');
-  // 4 blocos de 50 min começando às 08:00 com 10 min de intervalo
-  const d1 = plan.filter((e) => e.date === '2026-11-06').map((e) => e.time);
-  assert.deepEqual(d1, ['08:00', '09:00', '10:00', '11:00']);
+  // sem guia pendente: "Estudar <matéria>"; sem flashcards no plano
+  assert.ok(plan.some((e) => e.title === 'Estudar Penal'));
+  assert.ok(plan.some((e) => e.title === 'Estudar Civil'));
+  assert.ok(!plan.some((e) => /flashcard/i.test(e.title)));
+  assert.ok(Object.values(plan.reduce((m, e) => ((m[e.date] = (m[e.date] || 0) + e.duration), m), {})).every((m) => m <= 200));
 });
 
-test('plano: desconta tempo já ocupado e evita sobrepor horários', () => {
-  const subjects = [{ id: 'a', name: 'Civil', examDate: '2026-11-10' }];
-  const occurrences = [{ date: '2026-11-06', ev: { type: 'task', time: '09:00', duration: 60 } }];
-  const plan = generatePlan({ subjects, occurrences, start: '2026-11-06',
-    opts: { dailyMinutes: 180, blockMinutes: 50, breakMinutes: 10, startTime: '08:00', skipWeekdays: [], reviewDayBefore: false } });
-  const d1 = plan.filter((e) => e.date === '2026-11-06');
-  assert.equal(d1.length, 2); // (180-60)/50 = 2
-  assert.deepEqual(d1.map((e) => e.time), ['08:00', '10:00']);
+test('plano: guia maior que o horário livre é dividido em partes numeradas', () => {
+  const routine = [{ title: 'Aula', weekdays: [1, 2, 3, 4, 5, 6], start: '10:00', end: '18:00' }];
+  const windows = Array.from({ length: 7 }, () => ({ start: '08:00', end: '20:00', off: false }));
+  const plan = generatePlan({
+    subjects: [{ id: 'a', name: 'Civil', examDate: '2026-11-20' }], routine, start: '2026-11-09',
+    guidesBySubject: { a: [{ id: 'g1', title: 'Obrigações', status: 'novo', minutes: 200 }] },
+    opts: { dailyMinutes: 600, breakMinutes: 10, buffer: 0, windows, reviewDayBefore: false },
+  });
+  const parts = plan.filter((e) => e.guideId === 'g1');
+  // seg: 08:00–10:00 (120) + 18:00–20:00 (80 restantes)
+  assert.deepEqual(parts.map((e) => [e.date, e.time, e.duration]), [['2026-11-09', '08:00', 120], ['2026-11-09', '18:00', 80]]);
+  assert.deepEqual(parts.map((e) => e.title), ['Estudar: Obrigações (parte 1 de 2)', 'Estudar: Obrigações (parte 2 de 2)']);
+});
+
+test('plano: limite de sessão opcional, desconto de tarefas e guia que não cabe', () => {
+  const plan = generatePlan({
+    subjects: [{ id: 'a', name: 'Civil', examDate: '2026-11-10' }], start: '2026-11-09',
+    occurrences: [{ date: '2026-11-09', ev: { type: 'task', time: '09:00', duration: 60 } }],
+    guidesBySubject: { a: [{ id: 'g1', title: 'Longo', status: 'novo', minutes: 500 }] },
+    opts: { dailyMinutes: 180, breakMinutes: 10, startTime: '08:00', skipWeekdays: [], reviewDayBefore: false, maxSession: 50 },
+  });
+  // 180 − 60 já ocupados = 120 min; sessões de no máx. 50 min, desviando da tarefa das 09:00;
+  // os 20 min que sobram são menos que o mínimo (25) e ficam livres
+  assert.deepEqual(plan.map((e) => [e.time, e.duration]), [['08:00', 50], ['10:00', 50]]);
+  assert.equal(plan.unplanned.length, 1);
+  assert.equal(plan.unplanned[0].minutes, 400);
+});
+
+test('tempo de estudo estimado dos guias', () => {
+  assert.equal(estimateStudyMinutes('palavra '.repeat(1000)), 15); // 10 min, mas o mínimo é 15
+  assert.equal(estimateStudyMinutes(''), 15);
+  assert.equal(estimateStudyMinutes('a '.repeat(2400)), 25);
+  assert.equal(guideMinutes({ studyMinutes: 95, content: 'x' }), 95);
 });
 
 // Rotina de exemplo: aulas de manhã, deslocamento, terapia na quarta, jantar.
@@ -106,7 +136,8 @@ function mergeCheck(b) { return b; }
 test('plano com rotina: nenhum bloco cai em aula, deslocamento, terapia ou jantar', () => {
   const plan = generatePlan({
     subjects: [{ id: 'a', name: 'Civil', examDate: '2026-11-20' }], routine: ROTINA, start: '2026-11-09',
-    opts: { dailyMinutes: 300, blockMinutes: 50, breakMinutes: 10, buffer: 15, windows: JANELAS },
+    guidesBySubject: { a: [{ id: 'g1', title: 'Contratos', status: 'novo', minutes: 240 }] },
+    opts: { dailyMinutes: 300, breakMinutes: 10, buffer: 15, windows: JANELAS },
   });
   assert.ok(plan.length > 0);
   for (const e of plan) {
@@ -118,27 +149,34 @@ test('plano com rotina: nenhum bloco cai em aula, deslocamento, terapia ou janta
       const ra = rh * 60 + rm - 15, rb = eh * 60 + em + 15;
       assert.ok(b <= ra || a >= rb, `${e.date} ${e.time} (${e.duration}min) bate com ${r.title}`);
     }
-    assert.ok(e.duration >= 25 && e.duration <= 50);
+    assert.ok(e.duration >= 25, 'nenhum pedaço menor que 25 min');
     assert.ok(a >= 420 && b <= 1320, 'dentro da janela do dia');
   }
-  // quarta: espaço de 07:00–07:45 recebe bloco curto de 45 min
-  assert.ok(plan.some((e) => e.date === '2026-11-11' && e.time === '07:00' && e.duration === 45));
-  // limite diário respeitado
+  // seg: 07:00–07:45 (45) recebe o começo do guia; 13:15–19:15 recebe o resto
+  const g = plan.filter((e) => e.guideId === 'g1');
+  assert.deepEqual(g.map((e) => [e.date, e.time, e.duration]), [['2026-11-09', '07:00', 45], ['2026-11-09', '13:15', 195]]);
   const byDay = {}; for (const e of plan) byDay[e.date] = (byDay[e.date] || 0) + e.duration;
   assert.ok(Object.values(byDay).every((m) => m <= 300));
 });
 
-test('replanejar: blocos atrasados vão para os próximos espaços livres, antes da prova', () => {
+test('replanejar: atrasados vão para os próximos horários livres, antes da prova, divididos se preciso', () => {
   const missed = [{ id: 'm1', subjectId: 'a', duration: 50 }, { id: 'm2', subjectId: 'b', duration: 50 }];
   const r = replanMissed(missed, {
     today: '2026-11-09', routine: ROTINA, examBySubject: { a: '2026-11-10', b: '2026-11-30' },
     occurrences: [{ date: '2026-11-09', ev: { type: 'task', time: '07:00', duration: 50 } }],
-    opts: { dailyMinutes: 300, blockMinutes: 50, breakMinutes: 10, buffer: 15, windows: JANELAS, nowMinutes: 14 * 60 },
+    opts: { dailyMinutes: 300, breakMinutes: 10, buffer: 15, windows: JANELAS, nowMinutes: 14 * 60 },
   });
   assert.deepEqual(r.notPlaced, []);
   const m1 = r.moved.find((x) => x.id === 'm1'), m2 = r.moved.find((x) => x.id === 'm2');
   assert.equal(m1.date, '2026-11-09'); assert.equal(m1.time, '14:00'); // depois de agora, fora da rotina
   assert.equal(m2.date, '2026-11-09'); assert.equal(m2.time, '15:00'); // não sobrepõe m1
+  // bloco de 3h com só 1h45 livre hoje (20:45 na seg) → dividido
+  const big = replanMissed([{ id: 'x', subjectId: 'b', duration: 180 }], {
+    today: '2026-11-09', routine: ROTINA, examBySubject: { b: '2026-11-30' },
+    opts: { dailyMinutes: 600, breakMinutes: 10, buffer: 15, windows: JANELAS, nowMinutes: 17 * 60 + 45 },
+  });
+  assert.equal(big.moved[0].duration + big.added.reduce((x, p) => x + p.duration, 0), 180);
+  assert.ok(big.added.length >= 1);
   const none = replanMissed([{ id: 'x', subjectId: 'a', duration: 50 }], { today: '2026-11-10', examBySubject: { a: '2026-11-10' }, opts: { windows: defaultWindows() } });
   assert.deepEqual(none.notPlaced, ['x']); // prova já é hoje: não há antes
 });

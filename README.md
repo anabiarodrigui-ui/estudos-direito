@@ -57,7 +57,7 @@ python3 -m http.server 8080
 ```bash
 npm test             # testes unitários (Node 18+): datas, planejador, SM-2, Markdown, importação, geração de cartões, contas e criptografia
 npm run test:e2e     # testes ponta a ponta num navegador simulando um tablet (precisa do Playwright: npm i -D playwright && npx playwright install chromium)
-npm run test:e2e 2   # só uma etapa (1 = agenda, 2 = resumos, 3 = flashcards, 4 = extras, 5 = contas, 6 = rotina)
+npm run test:e2e 2   # só uma etapa (1 = agenda, 2 = resumos, 3 = flashcards, 4 = extras, 5 = contas, 6 = rotina, 7 = tempo dos guias e excluir plano)
 ```
 
 ---
@@ -130,15 +130,20 @@ Depois de instalado, o app abre em tela cheia, como um app comum, e **funciona s
 - **Planejador diário:** checklist do dia com barra de progresso, provas do dia em destaque e próximas provas com contagem regressiva.
 - **Minha rotina** (botão no topo da Agenda, ou em Mais): cadastre uma vez seus **compromissos fixos**: aulas, deslocamento, terapia, cuidados pessoais, refeições, trabalho/estágio, exercício… com dias da semana e horário. Em **Meu dia**, diga a que horas cada dia começa e termina e marque os dias de **folga**. Escolha também a **folga antes e depois de cada compromisso** (ex.: 15 min para chegar em casa e respirar). A tela mostra quanto tempo livre sobra em cada dia.
 - A rotina aparece na agenda (semana e dia) **em tom discreto e tracejado**. O botão **Rotina** esconde ou mostra esses itens. Tocar num deles abre a edição.
-- **Gerar plano:** encaixa blocos de estudo **só nos horários livres da sua rotina**, sempre com horário marcado:
+- **Gerar plano:** encaixa o estudo **só nos horários livres da sua rotina**, sempre com horário marcado:
+  - **cada guia ocupa o tempo de estudo dele**, sem bloco de tamanho fixo. Se o guia não couber num horário livre, ele é **dividido em partes** ("Estudar: Contratos (parte 1 de 3)", "parte 2 de 3"…) nos próximos horários livres;
+  - matéria **sem guia pendente** vira **"Estudar <matéria>"** (os flashcards fazem parte desse estudo; não há blocos separados de flashcards);
+  - na **véspera de cada prova**, "Revisão final — <matéria>" (pode desligar);
   - nunca coloca estudo em cima de aulas, deslocamento, terapia etc. (nem na folga antes/depois), nem nos dias de folga, nem fora do horário do seu dia;
   - respeita o **máximo de horas de estudo por dia** e as tarefas que você já tem;
-  - se um horário livre for menor que o bloco, usa um **bloco mais curto** (mínimo de 25 min);
-  - dá **mais blocos às provas mais próximas** e às matérias com **menos conteúdo estudado**, e reserva a **véspera de cada prova para revisão final**;
-  - usa os **guias ainda não lidos** como título dos blocos ("Estudar: Capítulo X"); quando acabam, vira "Revisão + flashcards";
+  - opcional: **sessão máxima sem pausa** (ex.: 1h30). Se o guia for maior, ele é dividido em partes com pausa entre elas. O padrão é "sem limite";
+  - dá **mais tempo às provas mais próximas** e às matérias com **menos conteúdo estudado**;
+  - se algum guia **não couber** antes da prova, o app avisa quais ficaram de fora;
   - se gerado para hoje, só usa horários **a partir de agora**;
-  - pode **substituir** um plano gerado antes, sem mexer nas suas tarefas manuais nem nos blocos concluídos.
-- **Reorganizar atrasados:** quando ficam blocos de estudo não concluídos em dias anteriores, aparece um aviso na Agenda. O botão **Reorganizar** remarca cada um no próximo horário livre (primeiro dentro do limite diário; se não couber, em qualquer horário livre da rotina), sempre **antes da prova** da matéria. O que não couber é listado para você decidir.
+  - pode **substituir** um plano gerado antes, sem mexer nas suas tarefas manuais nem nas sessões concluídas.
+- **Tempo de estudo dos guias:** o app estima pelo tamanho do texto (cerca de 100 palavras por minuto, com calma). Ajuste em **Gerar plano → Ver e ajustar o tempo de cada guia**, ou no guia (menu ⋯ → Editar). A biblioteca mostra o tempo de cada guia.
+- **Excluir plano:** botão na Agenda. Escolha entre apagar só as sessões **não concluídas** (as concluídas ficam no histórico) ou **todas** as sessões do plano. Tarefas criadas à mão, a rotina e as provas não são afetadas.
+- **Reorganizar atrasados:** quando ficam blocos de estudo não concluídos em dias anteriores, aparece um aviso na Agenda. O botão **Reorganizar** remarca cada um no próximo horário livre, dividindo em partes se precisar (primeiro dentro do limite diário; se não couber, em qualquer horário livre da rotina), sempre **antes da prova** da matéria. O que não couber é listado para você decidir.
 
 ### Resumos (guias de estudo)
 - **Importar guia:** escolha a matéria e **cole o Markdown** ou **escolha arquivos `.md`** (vários de uma vez). Marque "Separar em vários guias" para que cada `# Título` vire um capítulo. Com "Gerar flashcards automaticamente" marcado, você revisa os cartões sugeridos logo depois.
@@ -334,7 +339,7 @@ js/core/                 lógica sem interface (testada no Node)
   auth.js                contas locais: PBKDF2 (senha → chave), AES-GCM
   dates.js               datas em "AAAA-MM-DD", formatação pt-BR
   events.js              eventos, recorrência, provas, progresso
-  planner.js             plano de estudos: horários livres da rotina, blocos, reorganizar atrasados
+  planner.js             plano de estudos: horários livres da rotina, tempo dos guias, partes, reorganizar atrasados
   srs.js                 SM-2, fila de estudo, estatísticas, sequência
   markdown.js            renderizador de Markdown próprio
   importers.js           importação de flashcards e divisão de guias

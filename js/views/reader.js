@@ -12,8 +12,10 @@ import { icon } from '../ui/icons.js';
 import { subjectName, subjectOptions } from '../ui/common.js';
 import { go } from '../app.js';
 import { parseMarkdown } from '../core/markdown.js';
+import { fmtMinutes } from '../core/dates.js';
 import { applyHighlights, markFind, selectionOffsets } from '../ui/highlights.js';
 import { STATUS } from './library.js';
+import { guideMinutes, estimateStudyMinutes } from '../core/planner.js';
 
 const COLORS = [['', 'var(--mark)', 'Amarelo'], ['green', 'var(--mark-green)', 'Verde'], ['blue', 'var(--mark-blue)', 'Azul'], ['pink', 'var(--mark-pink)', 'Rosa']];
 
@@ -29,7 +31,7 @@ export function render(root, { id, params }) {
     <div class="reader-bar">
       <button class="btn icon ghost" data-back aria-label="Voltar">${icon('left')}</button>
       <div class="grow"><div class="title" style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.title)}</div>
-        <div class="small muted">${esc(subjectName(g.subjectId))}</div></div>
+        <div class="small muted">${esc(subjectName(g.subjectId))} · ${fmtMinutes(guideMinutes(g))} de estudo</div></div>
       ${hasToc ? `<button class="btn icon reader-toc-inline" data-tocbtn aria-label="Índice">${icon('list')}</button>` : ''}
       <button class="btn icon" data-font aria-label="Texto e fonte">${icon('text')}</button>
       <button class="btn icon" data-notes aria-label="Destaques e anotações">${icon('note')}</button>
@@ -264,13 +266,19 @@ function editGuide(g) {
     wide: true,
     body: `<form id="eg">
       <label class="field"><span>Título</span><input class="input" name="title" value="${esc(g.title)}"></label>
-      <label class="field"><span>Matéria</span><select class="input" name="subjectId">${subjectOptions(g.subjectId)}</select></label>
+      <div class="field-row">
+        <label class="field"><span>Matéria</span><select class="input" name="subjectId">${subjectOptions(g.subjectId)}</select></label>
+        <label class="field"><span>Tempo de estudo (min)</span><input class="input" type="number" name="studyMinutes" min="5" max="1200" step="5" value="${guideMinutes(g)}">
+          <span class="small muted" style="font-weight:400">Estimado pelo texto: ${estimateStudyMinutes(g.content)} min. O plano usa este tempo.</span></label>
+      </div>
       <label class="field"><span>Conteúdo (Markdown)</span><textarea class="input code" name="content" rows="16">${esc(g.content)}</textarea></label>
       <p class="small muted">Os destaques são reposicionados automaticamente se o trecho ainda existir.</p>
     </form>`,
     actions: [{ label: 'Cancelar' }, { label: 'Salvar', cls: 'primary', onClick: async (c, el) => {
       const d = formData(el.querySelector('#eg'));
-      Object.assign(g, { title: d.title.trim() || g.title, subjectId: d.subjectId, content: d.content });
+      const sm = Math.max(5, Math.round(+d.studyMinutes || 0));
+      Object.assign(g, { title: d.title.trim() || g.title, subjectId: d.subjectId, content: d.content,
+        studyMinutes: sm === estimateStudyMinutes(d.content) ? 0 : sm });
       await db.put('guides', g);
       toast('Guia salvo');
       go('guia/' + g.id, null, { replace: true });

@@ -9,6 +9,8 @@ import { subjects, subjectChips, subjectOptions, subjectName, subjectColor } fro
 import { go } from '../app.js';
 import { plainText } from '../core/markdown.js';
 import { splitGuides, titleFromFilename } from '../core/importers.js';
+import { guideMinutes, estimateStudyMinutes } from '../core/planner.js';
+import { fmtMinutes } from '../core/dates.js';
 
 export const STATUS = {
   novo: { label: 'Não lido', cls: '' },
@@ -110,12 +112,11 @@ export function render(root, { params }) {
 
 function guideRow(g) {
   const s = STATUS[g.status || 'novo'];
-  const words = (g.content.match(/\S+/g) || []).length;
   const hl = db.where('highlights', (h) => h.guideId === g.id).length;
   return `<li><button class="row guide-row" data-open="${g.id}">
     ${icon('book')}
     <span class="grow"><span class="title">${esc(g.title)}</span><br>
-      <span class="small muted">${Math.max(1, Math.round(words / 200))} min de leitura${hl ? ` · ${hl} destaque(s)` : ''}</span></span>
+      <span class="small muted">${fmtMinutes(guideMinutes(g))} de estudo${g.studyMinutes ? '' : ' (estimado)'}${hl ? ` · ${hl} destaque(s)` : ''}</span></span>
     <span class="badge st ${s.cls}">${s.label}</span></button></li>`;
 }
 

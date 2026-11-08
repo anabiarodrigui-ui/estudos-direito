@@ -1,22 +1,20 @@
 /**
- * Gerador de plano de estudos que respeita a ROTINA (funções puras, testáveis no Node).
+ * Gerador de plano de estudos que respeita a ROTINA e o TEMPO DOS GUIAS
+ * (funções puras, testáveis no Node).
  *
  * Como funciona:
  * 1. Para cada dia, parte da "janela" do dia (ex.: 07:00–22:30; dias de folga são pulados).
- * 2. Tira dessa janela tudo o que já ocupa o tempo:
- *    - compromissos fixos da rotina (aulas, deslocamento, terapia, cuidados pessoais…),
- *      com uma folga antes e depois de cada um;
- *    - tarefas e provas com horário já marcadas na agenda.
- * 3. Nos espaços que sobram, encaixa blocos de estudo (duração padrão; se o espaço for
- *    menor, um bloco mais curto, desde que tenha pelo menos o mínimo), até o limite de
- *    horas de estudo por dia.
- * 4. Escolhe a matéria de cada bloco: na véspera de uma prova, os primeiros blocos são
- *    "Revisão final"; os demais vão por prioridade (prova mais próxima e menos conteúdo
- *    estudado pesam mais; a mesma matéria perde peso a cada bloco no dia, para variar).
- * 5. Os títulos seguem os guias ainda não lidos ("Estudar: Capítulo X"); quando acabam,
- *    viram "Revisão + flashcards".
+ * 2. Tira dessa janela tudo o que já ocupa o tempo: compromissos fixos da rotina (com uma
+ *    folga antes e depois) e tarefas/provas com horário já marcadas.
+ * 3. Nos espaços livres, encaixa o estudo até o limite de horas por dia:
+ *    - cada guia pendente ocupa o TEMPO DE ESTUDO dele; se não couber num espaço, é
+ *      dividido em partes ("parte 1 de 3") nos próximos espaços livres;
+ *    - matéria sem guia pendente vira "Estudar <matéria>";
+ *    - na véspera da prova, "Revisão final — <matéria>".
+ * 4. A matéria de cada pedaço é escolhida por prioridade: prova mais próxima e menos
+ *    conteúdo estudado pesam mais; quem já estudou mais no dia perde peso (para variar).
  *
- * replanMissed() usa a mesma lógica de espaços livres para remarcar blocos atrasados.
+ * replanMissed() usa os mesmos espaços livres para remarcar blocos atrasados.
  */
 import { addDays, diffDays, weekday, timeToMin, minToTime } from './dates.js';
 
@@ -111,119 +109,202 @@ export function freeMinutesByWeekday({ windows, routine = [], buffer = 0 }, refM
   });
 }
 
+// ---------------------------------------------------------------------------
+// Tempo de estudo dos guias
+
+/** Palavras por minuto num estudo atento (ler, grifar, entender). */
+export const STUDY_WPM = 100;
+
+/** Estimativa de tempo de estudo de um guia em Markdown (múltiplos de 5 min, mínimo 15). */
+export function estimateStudyMinutes(markdown) {
+  const words = (String(markdown || '').replace(/[#>*_`|\-]/g, ' ').match(/\S+/g) || []).length;
+  return Math.max(15, Math.ceil(words / STUDY_WPM / 5) * 5);
+}
+
+/** Tempo de estudo de um guia: o informado pela usuária ou a estimativa. */
+export const guideMinutes = (g) => (g.studyMinutes > 0 ? g.studyMinutes : estimateStudyMinutes(g.content || ''));
+
+/** Espaços livres de um dia (em minutos), já descontando rotina, folgas e agenda. */
+export function dayGaps(date, { windows, routine = [], occurrences = [], buffer = 0, from = 0 }) {
+  const w = windows[weekday(date)];
+  if (!w || w.off) return [];
+  const ws = Math.max(timeToMin(w.start) ?? 480, from), we = timeToMin(w.end) ?? 1320;
+  return freeGaps(ws, we, busyIntervals(date, { routine, occurrences, buffer })).map(([x, y]) => [x, y]);
+}
+
 /**
- * Gera o plano.
+ * Gera o plano respeitando o TEMPO DE CADA GUIA.
+ * - Cada guia pendente vira uma tarefa com o tempo dele; se não couber num horário livre,
+ *   é dividido em partes ("parte 1 de 3"), em sequência, nos próximos horários livres.
+ * - Matéria sem guia pendente: "Estudar <matéria>" (sessões de `genericMinutes`).
+ * - Véspera da prova: "Revisão final — <matéria>" (até `reviewMinutes`).
+ *
  * @param {object} p
  * @param {Array}  p.subjects  [{id, name, examDate}]
  * @param {Array}  p.occurrences ocorrências já existentes (de expand(), com provas)
  * @param {Array}  p.routine   compromissos fixos [{title, weekdays, start, end}]
- * @param {Object} p.guidesBySubject { subjectId: [{title, status}] } em ordem
+ * @param {Object} p.guidesBySubject { subjectId: [{id, title, status, minutes}] } em ordem
  * @param {Object} p.progressBySubject { subjectId: 0..100 }
  * @param {string} p.start     data inicial (AAAA-MM-DD)
- * @param {object} p.opts      { dailyMinutes, blockMinutes, breakMinutes, buffer, windows, reviewDayBefore, startFrom }
- *                             (compatível com o formato antigo: startTime, skipWeekdays)
- * @returns {Array} novos eventos (sem id), com generated: true
+ * @param {object} p.opts      { dailyMinutes, breakMinutes, buffer, windows, reviewDayBefore, startFrom,
+ *                               maxSession (0 = sem limite), genericMinutes, reviewMinutes }
+ * @returns {Array} novos eventos (sem id), com generated: true. A lista tem também
+ *          `.unplanned` = guias (ou partes) que não couberam antes da prova.
  */
 export function generatePlan({ subjects, occurrences = [], routine = [], guidesBySubject = {}, progressBySubject = {}, start, opts }) {
-  const o = { dailyMinutes: 240, blockMinutes: 50, breakMinutes: 10, buffer: 0, reviewDayBefore: true, ...opts };
+  const o = { dailyMinutes: 240, breakMinutes: 10, buffer: 0, reviewDayBefore: true, maxSession: 0, genericMinutes: 60, reviewMinutes: 120, ...opts };
   if (!o.windows) o.windows = defaultWindows({ startTime: o.startTime, skipWeekdays: o.skipWeekdays ?? [0], end: '23:00' });
+  const maxSession = o.maxSession > 0 ? o.maxSession : Infinity;
   const withExam = subjects.filter((s) => s.examDate && s.examDate > start);
-  if (!withExam.length || o.blockMinutes < MIN_BLOCK) return [];
+  const out = [];
+  out.unplanned = [];
+  if (!withExam.length) return out;
   const lastExam = withExam.map((s) => s.examDate).sort().at(-1);
 
-  // minutos de tarefas SEM horário já marcadas (contam no limite diário)
-  const untimed = {};
-  for (const oc of occurrences) if (oc.ev.type === 'task' && !oc.ev.time) untimed[oc.date] = (untimed[oc.date] || 0) + (oc.ev.duration || 0);
-  const timedTaskMin = {};
-  for (const oc of occurrences) if (oc.ev.type === 'task' && oc.ev.time) timedTaskMin[oc.date] = (timedTaskMin[oc.date] || 0) + (oc.ev.duration || 0);
+  // minutos de tarefas já marcadas (contam no limite diário)
+  const usedByDay = {};
+  for (const oc of occurrences) if (oc.ev.type === 'task') usedByDay[oc.date] = (usedByDay[oc.date] || 0) + (oc.ev.duration || 0);
 
-  const guideIdx = Object.fromEntries(withExam.map((s) => [s.id, 0]));
-  const pendingGuides = Object.fromEntries(withExam.map((s) => [s.id, (guidesBySubject[s.id] || []).filter((g) => g.status !== 'lido')]));
-  const titleFor = (s, kind) => {
-    if (kind === 'final') return `Revisão final — ${s.name}`;
-    const list = pendingGuides[s.id];
-    if (list.length && guideIdx[s.id] < list.length) return `Estudar: ${list[guideIdx[s.id]++].title} (${s.name})`;
-    return `Revisão + flashcards — ${s.name}`;
+  // fila de trabalho de cada matéria: guias pendentes em ordem, depois "Estudar <matéria>"
+  const queues = Object.fromEntries(withExam.map((s) => [s.id,
+    (guidesBySubject[s.id] || []).filter((g) => g.status !== 'lido').map((g) => ({ kind: 'guide', guideId: g.id, title: g.title, remaining: Math.max(MIN_BLOCK, g.minutes || 60), pieces: [] }))]));
+  const current = (s) => {
+    const q = queues[s.id];
+    // sobra de "Estudar <matéria>" menor que o mínimo é descartada (não vira bloco minúsculo)
+    while (q.length && (q[0].remaining <= 0 || (q[0].kind === 'subject' && q[0].remaining < MIN_BLOCK))) q.shift();
+    if (!q.length) q.push({ kind: 'subject', remaining: o.genericMinutes, pieces: [] });
+    return q[0];
+  };
+  const finished = []; // itens com partes (para numerar depois)
+
+  const lastGeneric = {}; // último "Estudar <matéria>" de cada matéria (para emendar sessões seguidas)
+  /** Encaixa um pedaço; devolve quantos minutos do limite diário foram usados. */
+  const place = (s, item, d, gap, len, title, budget) => {
+    const prev = lastGeneric[s.id];
+    if (item.kind === 'subject' && prev && prev.date === d && timeToMin(prev.time) + prev.duration + o.breakMinutes === gap[0]
+      && prev.duration + o.breakMinutes + len <= maxSession && len + o.breakMinutes <= budget) {
+      // continua a sessão anterior da mesma matéria (o intervalo vira estudo), sem criar outro bloco
+      prev.duration += o.breakMinutes + len;
+      gap[0] += len + o.breakMinutes;
+      return len + o.breakMinutes;
+    }
+    const ev = {
+      type: 'task', title, subjectId: s.id, date: d, time: minToTime(gap[0]), duration: len,
+      done: false, notes: '', recurrence: null, doneDates: [], skipDates: [], generated: true,
+      ...(item.guideId ? { guideId: item.guideId } : {}),
+    };
+    out.push(ev);
+    item.pieces.push(ev);
+    lastGeneric[s.id] = item.kind === 'subject' ? ev : null;
+    if (!finished.includes(item)) finished.push(item);
+    gap[0] += len + o.breakMinutes;
+    return len;
   };
 
-  const out = [];
   for (let d = start; d < lastExam; d = addDays(d, 1)) {
     const active = withExam.filter((s) => s.examDate > d);
     if (!active.length) continue;
     const examToday = withExam.some((s) => s.examDate === d);
-    const budget = (examToday ? o.dailyMinutes / 2 : o.dailyMinutes) - (untimed[d] || 0) - (timedTaskMin[d] || 0);
-    // no primeiro dia, pode começar só a partir de agora (startFrom, em minutos)
-    const slots = slotsForDay(d, { ...o, routine, occurrences, budget, from: d === start ? (o.startFrom || 0) : 0 });
-    if (!slots.length) continue;
+    let budget = (examToday ? o.dailyMinutes / 2 : o.dailyMinutes) - (usedByDay[d] || 0);
+    const gaps = dayGaps(d, { ...o, routine, occurrences, from: d === start ? (o.startFrom || 0) : 0 });
+    const minutesToday = {};
+    const fits = (need) => {
+      while (gaps.length && gaps[0][1] - gaps[0][0] < need) gaps.shift();
+      return gaps.length > 0;
+    };
 
-    const kinds = []; // [{s, kind}]
-    let free = slots.length;
+    // véspera de prova: revisão final primeiro
     if (o.reviewDayBefore) {
       for (const s of active.filter((x) => diffDays(d, x.examDate) === 1)) {
-        const n = Math.min(free, 2);
-        for (let i = 0; i < n; i++) kinds.push({ s, kind: 'final' });
-        free -= n;
+        const review = { kind: 'review', remaining: o.reviewMinutes, pieces: [] };
+        while (review.remaining > 0 && budget >= MIN_BLOCK && fits(MIN_BLOCK)) {
+          const len = Math.min(review.remaining, gaps[0][1] - gaps[0][0], budget, maxSession);
+          budget -= place(s, review, d, gaps[0], len, `Revisão final — ${s.name}`, budget);
+          review.remaining -= len;
+          minutesToday[s.id] = (minutesToday[s.id] || 0) + len;
+        }
       }
     }
-    const count = {};
-    for (let i = 0; i < free; i++) {
+
+    // estudo: escolhe a matéria por prioridade e encaixa o próximo pedaço do item dela
+    let guard = 0;
+    while (budget >= MIN_BLOCK && gaps.length && guard++ < 200) {
       let best = null, bestScore = -1;
       for (const s of active) {
         const days = Math.max(1, diffDays(d, s.examDate));
         const prog = (progressBySubject[s.id] || 0) / 100;
-        const score = (1 / days) * (1.5 - prog) / (1 + (count[s.id] || 0) * 0.9);
+        const score = (1 / days) * (1.5 - prog) / (1 + ((minutesToday[s.id] || 0) / 60) * 0.9);
         if (score > bestScore) { bestScore = score; best = s; }
       }
-      count[best.id] = (count[best.id] || 0) + 1;
-      kinds.push({ s: best, kind: 'study' });
+      const item = current(best);
+      const need = Math.min(MIN_BLOCK, item.remaining); // um final curto de guia é aceito
+      if (!fits(need)) break;
+      const len = Math.min(item.remaining, gaps[0][1] - gaps[0][0], budget, maxSession);
+      const title = item.kind === 'guide' ? `Estudar: ${item.title}` : `Estudar ${best.name}`;
+      budget -= place(best, item, d, gaps[0], len, title, budget);
+      item.remaining -= len;
+      minutesToday[best.id] = (minutesToday[best.id] || 0) + len;
     }
+  }
 
-    slots.forEach(([t, len], i) => {
-      const { s, kind } = kinds[i];
-      out.push({
-        type: 'task', title: titleFor(s, kind), subjectId: s.id, date: d,
-        time: minToTime(t), duration: len, done: false, notes: '', recurrence: null,
-        doneDates: [], skipDates: [], generated: true,
-      });
-    });
+  // numera as partes dos guias divididos: "(parte 1 de 3)"
+  for (const item of finished) {
+    if (item.kind !== 'guide' || item.pieces.length < 2) continue;
+    const total = item.pieces.length + (item.remaining > 0 ? 1 : 0);
+    item.pieces.forEach((ev, i) => { ev.title = `${ev.title} (parte ${i + 1} de ${total})`; ev.part = i + 1; ev.parts = total; });
+  }
+  // guias que não couberam (inteiros ou o restante) antes da prova
+  for (const s of withExam) {
+    for (const item of queues[s.id]) if (item.kind === 'guide' && item.remaining > 0) out.unplanned.push({ subjectId: s.id, title: item.title, minutes: item.remaining });
   }
   return out;
 }
 
 /**
  * Remarca blocos atrasados (não concluídos, de dias anteriores) nos próximos espaços livres.
- * @param {Array} missed eventos a remarcar [{id, subjectId, duration, ...}]
+ * Se um bloco não couber inteiro num horário livre, é dividido em partes.
+ * @param {Array} missed eventos a remarcar [{id, subjectId, duration, title, ...}]
  * @param {object} p { today, occurrences (de hoje em diante), routine, examBySubject: {id: date}, opts, horizon }
- * @returns {{ moved: Array<{id, date, time, duration}>, notPlaced: Array<id> }}
+ * @returns {{ moved: Array<{id, date, time, duration}>, added: Array<{from, date, time, duration}>, notPlaced: Array<id> }}
  */
 export function replanMissed(missed, { today, occurrences = [], routine = [], examBySubject = {}, opts = {}, horizon = 60 }) {
-  const o = { dailyMinutes: 240, blockMinutes: 50, breakMinutes: 10, buffer: 0, ...opts };
+  const o = { dailyMinutes: 240, breakMinutes: 10, buffer: 0, ...opts };
   if (!o.windows) o.windows = defaultWindows({ startTime: o.startTime, skipWeekdays: o.skipWeekdays ?? [0], end: '23:00' });
   const occ = [...occurrences];
   const used = {};
   for (const oc of occ) if (oc.ev.type === 'task') used[oc.date] = (used[oc.date] || 0) + (oc.ev.duration || 0);
-  const moved = [], notPlaced = [];
+  const moved = [], added = [], notPlaced = [];
   // a prova mais próxima primeiro
   const queue = [...missed].sort((a, b) => (examBySubject[a.subjectId] || '9999') < (examBySubject[b.subjectId] || '9999') ? -1 : 1);
+
   const tryPlace = (ev, respectBudget) => {
     const limit = examBySubject[ev.subjectId] || addDays(today, horizon);
-    for (let d = today; d < limit && d <= addDays(today, horizon); d = addDays(d, 1)) {
-      const budget = respectBudget ? o.dailyMinutes - (used[d] || 0) : Infinity;
-      const want = Math.max(MIN_BLOCK, ev.duration || o.blockMinutes);
-      // hoje: só a partir de agora (arredondado para os próximos 5 min)
-      const from = d === today ? Math.ceil((opts.nowMinutes ?? 0) / 5) * 5 : 0;
-      const slot = slotsForDay(d, { ...o, blockMinutes: want, routine, occurrences: occ, budget, from })[0];
-      if (!slot) continue;
-      const [t, len] = slot;
-      const upd = { id: ev.id, date: d, time: minToTime(t), duration: len };
-      moved.push(upd);
-      occ.push({ date: d, ev: { type: 'task', time: upd.time, duration: len + o.breakMinutes } }); // + intervalo até o próximo bloco
-      used[d] = (used[d] || 0) + len;
-      return true;
+    let remaining = Math.max(1, ev.duration || 50);
+    const pieces = [];
+    const occAdded = [];
+    for (let d = today; d < limit && d <= addDays(today, horizon) && remaining > 0; d = addDays(d, 1)) {
+      let budget = respectBudget ? o.dailyMinutes - (used[d] || 0) : Infinity;
+      const from = d === today ? Math.ceil((opts.nowMinutes ?? 0) / 5) * 5 : 0; // hoje: a partir de agora
+      const gaps = dayGaps(d, { ...o, routine, occurrences: [...occ, ...occAdded], from });
+      for (const g of gaps) {
+        while (remaining > 0 && budget > 0) {
+          const len = Math.min(remaining, g[1] - g[0], budget);
+          if (len < Math.min(MIN_BLOCK, remaining)) break;
+          pieces.push({ date: d, time: minToTime(g[0]), duration: len });
+          occAdded.push({ date: d, ev: { type: 'task', time: minToTime(g[0]), duration: len + o.breakMinutes } });
+          g[0] += len + o.breakMinutes; remaining -= len; budget -= len;
+        }
+        if (remaining <= 0) break;
+      }
     }
-    return false;
+    if (remaining > 0) return false;
+    occ.push(...occAdded);
+    for (const p of pieces) used[p.date] = (used[p.date] || 0) + p.duration;
+    moved.push({ id: ev.id, ...pieces[0] });
+    for (const p of pieces.slice(1)) added.push({ from: ev.id, ...p });
+    return true;
   };
   // 1ª tentativa: dentro do limite diário; 2ª: em qualquer horário livre da rotina
   for (const ev of queue) if (!tryPlace(ev, true) && !tryPlace(ev, false)) notPlaced.push(ev.id);
-  return { moved, notPlaced };
+  return { moved, added, notPlaced };
 }

@@ -14,7 +14,7 @@ import {
   WEEKDAYS_SHORT, diffDays, countdownText, fmtMinutes, parseISO, fmtBR,
 } from '../core/dates.js';
 import { expand, subjectProgress } from '../core/events.js';
-import { generatePlan, replanMissed, routineOn, freeMinutesByWeekday } from '../core/planner.js';
+import { generatePlan, replanMissed, routineOn, freeMinutesByWeekday, guideMinutes } from '../core/planner.js';
 
 export function render(root, { params }) {
   const today = todayISO();
@@ -23,6 +23,7 @@ export function render(root, { params }) {
   const filter = params.s || '';
   const showRoutine = db.getSettings().showRoutine !== false;
   const missed = missedBlocks(today);
+  const hasPlan = db.all('events').some((e) => e.generated);
 
   const nav = (v, d) => go('agenda', { view: v, date: d, ...(filter ? { s: filter } : {}) }, { replace: true });
   const step = view === 'month' ? (n) => addMonths(date, n) : view === 'week' ? (n) => addDays(date, 7 * n) : (n) => addDays(date, n);
@@ -34,6 +35,7 @@ export function render(root, { params }) {
       <div class="actions">
         <button class="btn" data-routine-page>${icon('list')} Minha rotina</button>
         <button class="btn" data-plan>${icon('wand')} Gerar plano</button>
+        ${hasPlan ? `<button class="btn danger" data-delplan>${icon('trash')} Excluir plano</button>` : ''}
       </div></div>
     ${missed.length ? `<div class="card missed-banner"><span class="grow"><b>${missed.length} bloco(s) de estudo ficaram para trás.</b><br><span class="small muted">Posso encaixá-los nos próximos horários livres da sua rotina.</span></span>
       <button class="btn primary" data-replan>${icon('reset')} Reorganizar</button></div>` : ''}
@@ -63,6 +65,7 @@ export function render(root, { params }) {
     if (t.closest('[data-step]')) return nav(view, step(+t.closest('[data-step]').dataset.step));
     if (t.closest('[data-today]')) return nav(view, today);
     if (t.closest('[data-plan]')) return openPlanDialog();
+    if (t.closest('[data-delplan]')) return openDeletePlan();
     if (t.closest('[data-routine-page]')) return go('rotina');
     if (t.closest('[data-replan]')) return replan(missed);
     if (t.closest('[data-toggle-routine]')) return db.setSettings({ showRoutine: !showRoutine });
@@ -336,9 +339,17 @@ async function deleteEvent(ev, date) {
 
 function planOpts(s = db.getSettings()) {
   return {
-    dailyMinutes: s.planDailyMinutes, blockMinutes: s.planBlockMinutes, breakMinutes: s.planBreakMinutes,
-    buffer: s.routineBuffer ?? 15, windows: dayWindows(), reviewDayBefore: s.planReviewDayBefore,
+    dailyMinutes: s.planDailyMinutes, breakMinutes: s.planBreakMinutes, maxSession: s.planMaxSession || 0,
+    genericMinutes: s.planGenericMinutes || 60, buffer: s.routineBuffer ?? 15, windows: dayWindows(),
+    reviewDayBefore: s.planReviewDayBefore,
   };
+}
+
+/** Guias ainda não lidos de cada matéria, em ordem, com o tempo de estudo. */
+function pendingGuidesBySubject(subs) {
+  const guides = db.all('guides').sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.createdAt - b.createdAt);
+  return Object.fromEntries(subs.map((x) => [x.id, guides.filter((g) => g.subjectId === x.id && g.status !== 'lido')
+    .map((g) => ({ id: g.id, title: g.title, status: g.status, minutes: guideMinutes(g) }))]));
 }
 
 function openPlanDialog() {
@@ -351,6 +362,7 @@ function openPlanDialog() {
   const routine = db.all('routine');
   const free = freeMinutesByWeekday({ windows: dayWindows(), routine, buffer: s.routineBuffer });
   const prevGenerated = db.where('events', (e) => e.generated && !e.done && e.date >= today).length;
+  const pending = pendingGuidesBySubject(subs);
   openModal({
     title: 'Gerar plano de estudos',
     body: `<form id="pf">
@@ -361,43 +373,66 @@ function openPlanDialog() {
           : `<div class="spread"><span>${icon('list')} <b>Sua rotina ainda está vazia.</b> Cadastre aulas, deslocamento e outros compromissos para o plano não marcar estudo nesses horários.</span>`}
           <button type="button" class="btn small" data-goroutine>Editar rotina</button></div>
       </div>
-      <div class="card mt" style="box-shadow:none">${subs.map((x) => `<div class="spread small"><span><span class="dot" style="background:${x.color}"></span> ${esc(x.name)}</span><span class="muted">${fmtBR(x.examDate)} · ${countdownText(diffDays(today, x.examDate))}</span></div>`).join('')}</div>
+      <div class="card mt" style="box-shadow:none">${subs.map((x) => {
+        const gs = pending[x.id];
+        const tot = gs.reduce((a, g) => a + g.minutes, 0);
+        return `<div class="spread small"><span><span class="dot" style="background:${x.color}"></span> ${esc(x.name)}</span><span class="muted">${fmtBR(x.examDate)} · ${countdownText(diffDays(today, x.examDate))}</span></div>
+          <div class="small muted" style="margin:0 0 8px 20px">${gs.length ? `${gs.length} guia(s) a estudar · ${fmtMinutes(tot)}` : 'sem guias pendentes → “Estudar ' + esc(x.name) + '”'}</div>`;
+      }).join('')}
+        ${Object.values(pending).some((g) => g.length) ? `<button type="button" class="btn small" data-guidetimes>${icon('timer')} Ver e ajustar o tempo de cada guia</button>` : ''}</div>
       <div class="field-row mt">
         <label class="field"><span>Começar em</span><input class="input" type="date" name="start" value="${today}"></label>
         <label class="field"><span>Máximo de estudo por dia (horas)</span><input class="input" type="number" name="hours" min="0.5" max="14" step="0.5" value="${s.planDailyMinutes / 60}"></label>
       </div>
       <div class="field-row">
-        <label class="field"><span>Duração do bloco (min)</span><input class="input" type="number" name="block" min="25" max="180" step="5" value="${s.planBlockMinutes}"></label>
-        <label class="field"><span>Intervalo entre blocos (min)</span><input class="input" type="number" name="brk" min="0" max="60" step="5" value="${s.planBreakMinutes}"></label>
+        <label class="field"><span>Sessão máxima sem pausa</span><select class="input" name="maxs">
+          ${[[0, 'Sem limite (o tempo do guia)'], [45, '45 min'], [60, '1h'], [90, '1h30'], [120, '2h'], [180, '3h']].map(([v, l]) => `<option value="${v}" ${v === (s.planMaxSession || 0) ? 'selected' : ''}>${l}</option>`).join('')}
+        </select></label>
+        <label class="field"><span>Pausa entre sessões (min)</span><input class="input" type="number" name="brk" min="0" max="60" step="5" value="${s.planBreakMinutes}"></label>
       </div>
-      <p class="small muted">Se um horário livre for menor que o bloco, o app usa um bloco mais curto (mínimo de 25 min). Os dias de folga e o início/fim de cada dia ficam em <b>Minha rotina</b>.</p>
+      <label class="field"><span>Sessões “Estudar matéria” (sem guia)</span><select class="input" name="gen">
+        ${[30, 45, 60, 90, 120].map((v) => `<option value="${v}" ${v === (s.planGenericMinutes || 60) ? 'selected' : ''}>${fmtMinutes(v)}</option>`).join('')}
+      </select></label>
+      <p class="small muted">Cada guia ocupa o tempo de estudo dele. Se não couber num horário livre, é dividido em partes (parte 1 de 2, 2 de 2…). Os dias de folga e o início/fim de cada dia ficam em <b>Minha rotina</b>.</p>
       <label class="check"><input type="checkbox" name="review" ${s.planReviewDayBefore ? 'checked' : ''}> Reservar a véspera de cada prova para revisão final</label>
       ${prevGenerated ? `<label class="check"><input type="checkbox" name="replace" checked> Substituir o plano gerado anteriormente (${prevGenerated} blocos futuros não concluídos)</label>` : ''}
     </form>`,
-    onOpen: (el, close) => el.querySelector('[data-goroutine]').addEventListener('click', () => { close(); go('rotina'); }),
+    onOpen: (el, close) => {
+      el.querySelector('[data-goroutine]').addEventListener('click', () => { close(); go('rotina'); });
+      el.querySelector('[data-guidetimes]')?.addEventListener('click', () => { close(); openGuideTimes(subs, () => openPlanDialog()); });
+    },
     actions: [
       { label: 'Cancelar' },
       { label: `${icon('wand')} Gerar`, cls: 'primary', onClick: async (close, el) => {
         const d = formData(el.querySelector('#pf'));
-        db.setSettings({ planDailyMinutes: Math.round((+d.hours || 4) * 60), planBlockMinutes: Math.max(25, +d.block || 50), planBreakMinutes: Math.max(0, +d.brk || 0), planReviewDayBefore: !!d.review });
+        db.setSettings({ planDailyMinutes: Math.round((+d.hours || 4) * 60), planMaxSession: +d.maxs || 0, planGenericMinutes: +d.gen || 60, planBreakMinutes: Math.max(0, +d.brk || 0), planReviewDayBefore: !!d.review });
         const opts = planOpts();
         const start = d.start || today;
         // hoje: só a partir de agora (arredondado para os próximos 5 min)
         if (start === today) { const now = new Date(); opts.startFrom = Math.ceil((now.getHours() * 60 + now.getMinutes()) / 5) * 5; }
         if (d.replace) await db.removeMany('events', db.where('events', (e) => e.generated && !e.done && e.date >= today).map((e) => e.id));
         const lastExam = subs.map((x) => x.examDate).sort().at(-1);
-        const guides = db.all('guides').sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         const plan = generatePlan({
           subjects: subs, routine,
           occurrences: expand(db.all('events'), subjects(), start, lastExam),
-          guidesBySubject: Object.fromEntries(subs.map((x) => [x.id, guides.filter((g) => g.subjectId === x.id)])),
+          guidesBySubject: pendingGuidesBySubject(subs),
           progressBySubject: Object.fromEntries(subs.map((x) => [x.id, subjectProgress(x, db.all('guides'), db.all('events'))])),
           start, opts,
         });
         if (!plan.length) { toast('Não há horário livre para estudar com essa rotina e essas opções.'); return false; }
-        await db.putMany('events', plan);
-        toast(`Plano criado: ${plan.length} blocos de estudo`);
+        const unplanned = plan.unplanned || [];
+        await db.putMany('events', [...plan]);
+        toast(`Plano criado: ${plan.length} sessões de estudo`);
         go('agenda', { view: 'week', date: start });
+        if (unplanned.length) {
+          openModal({
+            title: 'Alguns guias não couberam',
+            body: `<p>Não há horário livre suficiente antes da prova para estudar tudo. Ficaram de fora:</p>
+              <ul>${unplanned.map((u) => `<li><b>${esc(u.title)}</b> — ${esc(subjectName(u.subjectId))}: ${fmtMinutes(u.minutes)}</li>`).join('')}</ul>
+              <p class="small muted">Para caber, você pode aumentar o máximo de estudo por dia, liberar horários em Minha rotina ou ajustar o tempo dos guias.</p>`,
+            actions: [{ label: 'Entendi', cls: 'primary' }],
+          });
+        }
       } },
     ],
   });
@@ -416,13 +451,18 @@ async function replan(missed) {
   const now = new Date();
   const examBySubject = Object.fromEntries(subjects().filter((x) => x.examDate).map((x) => [x.id, x.examDate]));
   const missedIds = new Set(missed.map((m) => m.id));
-  const { moved, notPlaced } = replanMissed(missed, {
+  const { moved, added, notPlaced } = replanMissed(missed, {
     today, routine: db.all('routine'), examBySubject,
     occurrences: expand(db.all('events').filter((e) => !missedIds.has(e.id)), subjects(), today, addDays(today, 60)),
     opts: { ...planOpts(), nowMinutes: now.getHours() * 60 + now.getMinutes() },
   });
   const updated = moved.map((m) => ({ ...db.get('events', m.id), date: m.date, time: m.time, duration: m.duration }));
-  if (updated.length) await db.putMany('events', updated);
+  // pedaços extras quando um bloco precisou ser dividido
+  const extra = added.map((p) => {
+    const { id, createdAt, updatedAt, ...base } = db.get('events', p.from);
+    return { ...base, title: base.title + ' (continuação)', date: p.date, time: p.time, duration: p.duration, done: false };
+  });
+  if (updated.length || extra.length) await db.putMany('events', [...updated, ...extra]);
   if (notPlaced.length) {
     openModal({
       title: 'Reorganizar atrasados',
@@ -435,6 +475,60 @@ async function replan(missed) {
       ],
     });
   } else toast(`${updated.length} bloco(s) remarcado(s) nos próximos horários livres`);
+}
+
+// ---------------------------------------------------------------------------
+// Tempo de estudo dos guias (usado pelo plano)
+
+function openGuideTimes(subs, after) {
+  const pending = pendingGuidesBySubject(subs);
+  openModal({
+    title: 'Tempo de estudo dos guias',
+    body: `<p class="small muted">O app estima o tempo pelo tamanho do texto (cerca de 100 palavras por minuto, com calma). Ajuste para o tempo que você realmente leva. O plano usa esses valores.</p>
+      <form id="gt">${subs.filter((x) => pending[x.id].length).map((x) => `
+        <h3 class="mt"><span class="dot" style="background:${x.color}"></span> ${esc(x.name)}</h3>
+        ${pending[x.id].map((g) => `<label class="guide-time"><span>${esc(g.title)}</span>
+          <span class="gt-input"><input class="input" type="number" min="5" max="1200" step="5" name="${g.id}" value="${g.minutes}"> min</span></label>`).join('')}`).join('')}
+      </form>`,
+    actions: [{ label: 'Cancelar' }, { label: 'Salvar tempos', cls: 'primary', onClick: async (c, el) => {
+      const d = formData(el.querySelector('#gt'));
+      const changed = [];
+      for (const [id, v] of Object.entries(d)) {
+        const g = db.get('guides', id);
+        const m = Math.max(5, Math.round(+v || 0));
+        if (g && m !== guideMinutes(g)) changed.push({ ...g, studyMinutes: m });
+      }
+      if (changed.length) await db.putMany('guides', changed);
+      toast('Tempos salvos');
+      after?.();
+    } }],
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Excluir plano
+
+function openDeletePlan() {
+  const today = todayISO();
+  const gen = db.where('events', (e) => e.generated);
+  const future = gen.filter((e) => !e.done && e.date >= today);
+  const pastUndone = gen.filter((e) => !e.done && e.date < today);
+  const done = gen.filter((e) => e.done);
+  openModal({
+    title: 'Excluir plano de estudos',
+    body: `<p>Isso remove as sessões criadas pelo <b>Gerar plano</b>. Suas tarefas criadas à mão, a rotina e as provas não são afetadas.</p>
+      <form id="dp">
+        <label class="check"><input type="radio" name="what" value="pending" checked> Só as sessões não concluídas (${future.length + pastUndone.length})</label>
+        <p class="small muted" style="margin:0 0 8px 36px">Mantém as que você já concluiu, para o histórico e as estatísticas.</p>
+        <label class="check"><input type="radio" name="what" value="all"> Todas as sessões do plano (${gen.length}${done.length ? `, inclusive ${done.length} concluída(s)` : ''})</label>
+      </form>`,
+    actions: [{ label: 'Cancelar' }, { label: `${icon('trash')} Excluir plano`, cls: 'danger solid', onClick: async (c, el) => {
+      const what = formData(el.querySelector('#dp')).what;
+      const ids = (what === 'all' ? gen : gen.filter((e) => !e.done)).map((e) => e.id);
+      await db.removeMany('events', ids);
+      toast(`${ids.length} sessão(ões) do plano excluída(s)`);
+    } }],
+  });
 }
 
 function groupBy(arr, fn) {
