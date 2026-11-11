@@ -56,7 +56,7 @@ export function render(root, { params }) {
         <span class="name"><span class="dot" style="background:${s.color || 'var(--muted)'}"></span> ${esc(s.name)}</span>
         <span class="track"><span style="width:${(s.minutes / maxSubj) * 100}%"></span></span>
         <span class="small nowrap">${fmtMinutes(s.minutes)}${s.reviews ? ` · ${s.reviews} cartões` : ''}</span>
-      </div>`).join('') : '<p class="muted mb0">Nenhum tempo registrado nesta semana. Use o Pomodoro ou “Registrar tempo”.</p>'}</div>
+      </div>`).join('') : '<p class="muted mb0">Nenhum tempo registrado nesta semana. Use o cronômetro ou cadastre suas horas em “Tempo de estudo”.</p>'}</div>
 
     <div class="section"><h2>Flashcards revisados por dia</h2></div>
     <div class="card">${bars('reviews', maxRev, (v) => String(v))}</div>

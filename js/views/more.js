@@ -4,7 +4,7 @@ import { esc } from '../ui/dom.js';
 import { currentAccount, logout } from './login.js';
 
 const ITEMS = [
-  ['pomodoro', 'timer', 'Pomodoro', 'Timer de foco vinculado à matéria'],
+  ['cronometro', 'timer', 'Tempo de estudo', 'Cronômetro e cadastro de horas estudadas'],
   ['estatisticas', 'chart', 'Estatísticas', 'Horas, flashcards e tarefas da semana'],
   ['materias', 'subjects', 'Matérias', 'Cadastrar matérias e datas de prova'],
   ['rotina', 'list', 'Minha rotina', 'Aulas, deslocamento e outros compromissos fixos'],

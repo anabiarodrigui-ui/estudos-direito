@@ -3,7 +3,7 @@
  * Estratégia: "cache primeiro" para os arquivos do app, atualizando em segundo plano.
  * Ao publicar uma nova versão, aumente CACHE_VERSION.
  */
-const CACHE_VERSION = 'estudos-v5';
+const CACHE_VERSION = 'estudos-v6';
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-512-maskable.png',
@@ -13,7 +13,7 @@ const ASSETS = [
   'js/ui/dom.js', 'js/ui/icons.js', 'js/ui/common.js', 'js/ui/highlights.js', 'js/core/auth.js', 'js/views/login.js',
   'js/views/dashboard.js', 'js/views/calendar.js', 'js/views/subjects.js', 'js/views/more.js', 'js/views/settings.js',
   'js/views/library.js', 'js/views/reader.js', 'js/views/flashcards.js', 'js/views/study.js',
-  'js/views/pomodoro.js', 'js/views/stats.js', 'js/views/routine.js',
+  'js/views/timer.js', 'js/views/stats.js', 'js/views/routine.js',
 ];
 
 self.addEventListener('install', (e) => {

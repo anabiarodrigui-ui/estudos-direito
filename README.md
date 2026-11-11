@@ -9,7 +9,7 @@ Aplicativo web (PWA) para organizar os estudos das provas finais de Direito, fei
 | **Agenda** | Visões de mês, semana e dia; provas com contagem regressiva; tarefas e blocos de estudo (inclusive recorrentes); arrastar eventos; planejador diário com checklist; **Gerar plano de estudos**. |
 | **Resumos** | Biblioteca de guias em Markdown por matéria: índice navegável, busca em tudo, status "já li / estudar de novo", leitor com fonte ajustável, **marca-texto com o dedo** e anotações. |
 | **Cartões** | Flashcards com repetição espaçada (SM-2), gestos de deslizar, revisão rápida antes da prova, importação, geração automática a partir dos guias (local ou com IA) e estatísticas. |
-| **Pomodoro** | Timer de foco ligado a uma matéria, que registra as horas estudadas. |
+| **Tempo de estudo** | Cronômetro que continua contando mesmo com o app fechado, e cadastro das horas estudadas por matéria. |
 | **Estatísticas** | Semana a semana: horas (por dia e por matéria), flashcards revisados, taxa de acerto e tarefas concluídas. |
 
 ---
@@ -57,7 +57,7 @@ python3 -m http.server 8080
 ```bash
 npm test             # testes unitários (Node 18+): datas, planejador, SM-2, Markdown, importação, geração de cartões, contas e criptografia
 npm run test:e2e     # testes ponta a ponta num navegador simulando um tablet (precisa do Playwright: npm i -D playwright && npx playwright install chromium)
-npm run test:e2e 2   # só uma etapa (1 = agenda, 2 = resumos, 3 = flashcards, 4 = extras, 5 = contas, 6 = rotina, 7 = tempo dos guias e excluir plano)
+npm run test:e2e 2   # só uma etapa (1 = agenda, 2 = resumos, 3 = flashcards, 4 = cronômetro e estatísticas, 5 = contas, 6 = rotina, 7 = tempo dos guias e excluir plano)
 ```
 
 ---
@@ -173,10 +173,13 @@ Depois de instalado, o app abre em tela cheia, como um app comum, e **funciona s
 - **Novo cartão / editar:** pergunta, resposta, matéria, guia, tópico e tags. Dá para reiniciar o progresso de um cartão.
 - **Estatísticas:** pendentes hoje, novos, taxa de acerto (últimos 30 dias) e sequência de dias estudados.
 
-### Pomodoro e estatísticas
-- Escolha a matéria e toque em **Iniciar**. O timer continua certo mesmo trocando de tela ou bloqueando o tablet: quando o app está em outra tela, aparece uma "pílula" com o tempo no canto. Ao terminar um foco, os minutos são registrados para a matéria.
-- **Pular** durante um foco registra o tempo já estudado. **Registrar tempo** permite lançar estudo feito fora do app.
-- **Tempos:** ajuste foco, pausas e quantos focos até a pausa longa.
+### Tempo de estudo e estatísticas
+- Em **Tempo de estudo** (em Mais, ou na barra lateral em paisagem) há um **cronômetro**: escolha a matéria e toque em **Iniciar**.
+  - Ele guarda a hora em que você começou, por isso **continua contando mesmo se você trocar de tela, fechar o app ou bloquear o tablet**. Ao voltar, mostra o tempo certo.
+  - Nas outras telas, aparece uma "pílula" com o tempo no canto; toque nela para voltar ao cronômetro.
+  - **Pausar / Continuar** quando precisar. **Encerrar e salvar** mostra o tempo (dá para corrigir, se esqueceu de pausar) e uma anotação opcional. **Descartar** zera sem salvar.
+- **Cadastrar horas:** para registrar estudo feito sem o cronômetro, escolha matéria, data, horário de início (opcional) e quanto tempo (atalhos de 30 min a 3h). Toque num registro da lista para editar ou excluir.
+- A lista mostra os últimos 14 dias, com o total de cada dia; o topo mostra o total de hoje e da semana.
 - **Estatísticas:** escolha a semana nas setas. Toque numa barra para ver o detalhe do dia; "Ver tabela da semana" mostra tudo em números.
 
 ### Configurações
@@ -350,7 +353,7 @@ js/views/routine.js      "Minha rotina": compromissos fixos e horário de cada d
 js/views/login.js        tela de entrada, criar conta, sair, trocar senha, excluir conta
 js/ui/                   ícones, modais, destaques (marca-texto), componentes
 js/views/                uma tela por arquivo (dashboard, calendar, library, reader,
-                         flashcards, study, pomodoro, stats, subjects, settings, more)
+                         flashcards, study, timer, stats, subjects, settings, more)
 scripts/serve.mjs        servidor local sem dependências
 tests/*.test.mjs         testes unitários (node --test)
 tests/e2e/               testes ponta a ponta com Playwright (tablet 820×1180)

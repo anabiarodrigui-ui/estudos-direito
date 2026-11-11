@@ -1,7 +1,7 @@
 /**
  * Ponto de entrada: inicializa o banco, desenha a navegação e faz o roteamento por hash.
  * Rotas: #/ (início), #/agenda, #/resumos, #/guia/<id>, #/cartoes, #/estudar,
- *        #/pomodoro, #/estatisticas, #/materias, #/config, #/mais
+ *        #/cronometro, #/estatisticas, #/materias, #/config, #/mais
  */
 import * as db from './core/db.js';
 import { icon } from './ui/icons.js';
@@ -17,7 +17,8 @@ const ROUTES = {
   guia: () => import('./views/reader.js'),
   cartoes: () => import('./views/flashcards.js'),
   estudar: () => import('./views/study.js'),
-  pomodoro: () => import('./views/pomodoro.js'),
+  cronometro: () => import('./views/timer.js'),
+  pomodoro: () => import('./views/timer.js'), // endereço antigo
   estatisticas: () => import('./views/stats.js'),
   config: () => import('./views/settings.js'),
   mais: () => import('./views/more.js'),
@@ -28,14 +29,14 @@ const NAV = [
   { path: 'agenda', label: 'Agenda', icon: 'calendar' },
   { path: 'resumos', label: 'Resumos', icon: 'book' },
   { path: 'cartoes', label: 'Cartões', icon: 'cards' },
-  { path: 'pomodoro', label: 'Pomodoro', icon: 'timer', extra: true },
+  { path: 'cronometro', label: 'Tempo de estudo', icon: 'timer', extra: true },
   { path: 'estatisticas', label: 'Estatísticas', icon: 'chart', extra: true },
   { path: 'materias', label: 'Matérias', icon: 'subjects', extra: true },
   { path: 'config', label: 'Configurações', icon: 'settings', extra: true },
   { path: 'mais', label: 'Mais', icon: 'more', more: true },
 ];
 // Telas acessadas a partir de "Mais" acendem o ícone "Mais" na barra inferior.
-const UNDER_MORE = ['pomodoro', 'estatisticas', 'materias', 'config'];
+const UNDER_MORE = ['cronometro', 'pomodoro', 'estatisticas', 'materias', 'config'];
 // Telas abertas a partir da Agenda acendem o ícone da Agenda.
 const UNDER_AGENDA = ['rotina'];
 
@@ -126,8 +127,8 @@ async function boot() {
   addEventListener('hashchange', route);
   addEventListener('resize', () => renderNav());
   await route();
-  // Pomodoro em andamento continua aparecendo em qualquer tela.
-  import('./views/pomodoro.js').then((m) => m.initPill?.());
+  // Cronômetro em andamento continua aparecendo em qualquer tela.
+  import('./views/timer.js').then((m) => m.initPill?.());
 }
 
 async function start() {

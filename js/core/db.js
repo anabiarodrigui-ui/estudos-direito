@@ -230,7 +230,6 @@ export const DEFAULT_SETTINGS = {
   readerFont: 'serif',      // 'serif' | 'sans'
   readerLineHeight: 1.7,
   newCardsPerDay: 20,
-  pomoFocus: 25, pomoShort: 5, pomoLong: 15, pomoCycles: 4,
   planDailyMinutes: 240, planBlockMinutes: 50, planBreakMinutes: 10, planStartTime: '08:00',
   planSkipWeekdays: [0],    // (antigo) dias sem estudo — substituído por dayWindows
   planReviewDayBefore: true,

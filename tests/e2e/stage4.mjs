@@ -1,28 +1,50 @@
-// Etapa 4 — pomodoro, estatísticas, limpeza de dados e layout.
+// Etapa 4 — cronômetro, horas estudadas, estatísticas, limpeza de dados e layout.
 export default async function ({ page, step, expect, shot, clickText, BASE }) {
   console.log('Etapa 4 — extras');
-  await step('pomodoro: iniciar, pílula em outras telas e registro ao concluir', async () => {
-    await page.goto(BASE + '#/pomodoro');
-    await page.waitForSelector('.pomo-ring');
+  await step('cronômetro: conta fora da aba, aparece em outras telas e salva a sessão', async () => {
+    await page.goto(BASE + '#/cronometro');
+    await page.waitForSelector('#clock');
     await page.selectOption('#subj', { index: 1 });
     await page.click('#play');
-    await page.waitForFunction(() => document.querySelector('#time').textContent < '24:59', null, { timeout: 5000 });
-    await shot('4-pomodoro');
+    await page.waitForFunction(() => document.querySelector('#clock').textContent >= '00:00:02', null, { timeout: 5000 });
+    // sai da aba: a pílula mostra o tempo em outras telas
     await page.goto(BASE + '#/');
     await page.waitForSelector('#timer-pill:not([hidden])');
-    // simula o fim do foco
-    await page.evaluate(() => { const k = Object.keys(localStorage).find((x) => x.endsWith(':pomo')); const s = JSON.parse(localStorage.getItem(k)); s.endsAt = Date.now() + 300; localStorage.setItem(k, JSON.stringify(s)); });
-    await page.waitForTimeout(1500);
-    await page.goto(BASE + '#/pomodoro');
-    await page.waitForSelector('text=estudados hoje');
-    expect((await page.textContent('#phase')) === 'Pausa curta', 'deveria ir para pausa curta');
-    expect(await page.locator('.list .row', { hasText: '25 min' }).count() >= 1, 'sessão de 25 min');
+    // simula o app fechado por 1h25: o início ficou no passado
+    await page.evaluate(() => {
+      const k = Object.keys(localStorage).find((x) => x.endsWith(':timer'));
+      const s = JSON.parse(localStorage.getItem(k));
+      s.startedAt -= 85 * 60000; s.firstStart -= 85 * 60000;
+      localStorage.setItem(k, JSON.stringify(s));
+    });
+    await page.reload();
+    await page.waitForSelector('#timer-pill:not([hidden])');
+    await page.waitForFunction(() => document.querySelector('#timer-pill').textContent.includes('01:25:'), null, { timeout: 5000 });
+    await page.goto(BASE + '#/cronometro');
+    await page.waitForSelector('#clock');
+    expect((await page.textContent('#clock')).startsWith('01:25:'), 'tempo após "fechar" o app: ' + await page.textContent('#clock'));
+    await shot('4-cronometro');
+    await page.click('#play'); // pausa
+    await page.waitForSelector('#clock.paused');
+    await page.click('#stop');
+    expect(await page.inputValue('[name=h]') === '1' && await page.inputValue('[name=m]') === '25', 'tempo sugerido ao salvar');
+    await page.fill('[name=note]', 'Contratos');
+    await clickText('.sheet-foot button', 'Salvar');
+    await page.waitForSelector('.list .row:has-text("1h25")');
+    expect((await page.textContent('#clock')) === '00:00:00', 'cronômetro deveria zerar');
   });
-  await step('registrar tempo manualmente', async () => {
-    await clickText('button', 'Registrar tempo');
-    await page.fill('[name=minutes]', '40');
-    await clickText('.sheet-foot button', 'Registrar');
-    await page.waitForSelector('.list .row:has-text("40 min")');
+  await step('cadastrar horas estudadas manualmente e editar', async () => {
+    await clickText('button', 'Cadastrar horas');
+    await page.fill('[name=startTime]', '14:00');
+    await page.click('[data-quick="120"]');
+    await page.waitForSelector('#endinfo:has-text("Das 14:00 às 16:00")');
+    await clickText('.sheet-foot button', 'Salvar');
+    await page.waitForSelector('.list .row:has-text("2h")');
+    await page.locator('.list .row', { hasText: '2h' }).first().click();
+    await page.fill('[name=m]', '30');
+    await clickText('.sheet-foot button', 'Salvar');
+    await page.waitForSelector('.list .row:has-text("2h30")');
+    await shot('4-horas');
   });
   await step('estatísticas da semana', async () => {
     await page.goto(BASE + '#/estatisticas');
@@ -37,7 +59,7 @@ export default async function ({ page, step, expect, shot, clickText, BASE }) {
   await step('layout sem rolagem horizontal (celular e tablet)', async () => {
     for (const [w, h] of [[390, 844], [820, 1180], [1180, 820]]) {
       await page.setViewportSize({ width: w, height: h });
-      for (const r of ['', 'agenda?view=month', 'agenda?view=week', 'resumos', 'cartoes', 'pomodoro', 'estatisticas', 'config']) {
+      for (const r of ['', 'agenda?view=month', 'agenda?view=week', 'resumos', 'cartoes', 'cronometro', 'rotina', 'estatisticas', 'config']) {
         await page.goto(BASE + '#/' + r);
         await page.waitForSelector('.page-head');
         const over = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);

@@ -506,3 +506,17 @@ body.locked .main { padding-bottom: 32px; }
 .guide-time > span:first-child { flex: 1; min-width: 0; }
 .gt-input { display: flex; align-items: center; gap: 6px; flex: none; }
 .gt-input .input { width: 96px; }
+
+/* ---------- cronômetro ---------- */
+.stopwatch { text-align: center; }
+.stopwatch h2 { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.sw-clock { font-size: clamp(3rem, 12vw, 5rem); font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: .02em; color: var(--accent); line-height: 1.1; margin: 8px 0 4px; }
+.sw-clock.paused { color: var(--muted); }
+.sw-subject { max-width: 360px; margin: 12px auto; text-align: left; }
+.sw-actions { justify-content: center; margin-bottom: 12px; }
+.sw-main { min-width: 160px; }
+.hm { display: flex; gap: 12px; flex-wrap: wrap; }
+.hm label { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.hm .input { width: 96px; }
+.day-label { margin: 16px 0 6px; }
+.warn-box { background: var(--warn-soft); color: var(--warn); padding: 10px 12px; border-radius: var(--radius-sm); }

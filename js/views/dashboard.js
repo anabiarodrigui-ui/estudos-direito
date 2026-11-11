@@ -54,7 +54,7 @@ export function render(root) {
     </div>
     <div class="btn-row mt">
       ${due || newCount ? `<button class="btn primary" data-go="estudar">${icon('cards')} Estudar flashcards</button>` : ''}
-      <button class="btn" data-go="pomodoro">${icon('timer')} Pomodoro</button>
+      <button class="btn" data-go="cronometro">${icon('timer')} Cronômetro</button>
       <button class="btn" data-day>${icon('calendar')} Planejador de hoje</button>
     </div>
 
